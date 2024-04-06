@@ -15,7 +15,6 @@
  Timer Things (mostly from docs)
 *********************************************/
 // DO NOT TOUCH
- 
 // These define's must be placed at the beginning before #include "TimerInterrupt.h" 
 // _TIMERINTERRUPT_LOGLEVEL_ from 0 to 4 
 // Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system. 
@@ -29,7 +28,6 @@
 
 // Select the timers you're using, here ITimer1
 #define USE_TIMER_1     true
-
 // end DO NOT TOUCH
 
 /********************************************
@@ -37,6 +35,9 @@
 *********************************************/
 
 #include <Wire.h> // I2C library
+#include <I2C_16Bit.h>
+#include <SPI.h>
+#include <Pixy.h>
 
 /********************************************
   Pin Defines
@@ -49,6 +50,10 @@
 #define PIN_CTL_out 12
 #define PIN_CTA_out 13
 // end for testing
+
+// I2C Pins (TODO)
+#define PIN_I2C_SDA -1
+#define PIN_I2C_SCL -1
 
 
 /********************************************
@@ -63,21 +68,22 @@ typedef enum State {
 };
 
 typedef struct PID_params {
-  double curr_target,   // the current desired position
-  double curr_error,    // the current error 
-  double kp,
-  double ki,
-  double kd,
-  double integrator,      // integrates error over time
-  double integrator_sat,
-  double prior_error,
-  double clip,
+  double curr_target;   // the current desired position
+  double curr_error;    // the current error 
+  double kp;
+  double ki;
+  double kd;
+  double integrator;      // integrates error over time
+  double integrator_sat;
+  double prior_error;
+  double clip;
 };
 
 /********************************************
   Global Variables
 *********************************************/
 
+// counter
 volatile uint16_t counter_240_hz = 0;             // counts 240Hz timer increments
 volatile bool counter_new_val_available = false;  // asserted in timer ISR to tell loop that new counter is ready
 
@@ -97,6 +103,18 @@ PID_params track_yaw_params;
 PID_params target_pitch_params;
 PID_params target_yaw_params;
 
+// External measurements
+uint16_t distance_sensor_raw  = 0;    // ADC ticks, 0-1023
+double   distance_train       = 0.0;  // cm, 10-150
+Pixy pixy;
+uint16_t pixy_train_x         = 0;    // pixels, 0-319
+uint16_t pixy_train_y         = 0;    // pixels, 0-199
+
+// stepper motor feedback (TODO)
+
+// computed values
+double train_x = 0.0;
+double train_y = 0.0;
 
 /********************************************
   Interrupt Handlers
@@ -113,6 +131,32 @@ void HighFrequencyTimerHandler()
   counter_240_hz++;
 }
 
+
+
+/********************************************
+  Communications
+*********************************************/
+
+#define ADC_BASE_ADDRESS    0x50 // 101 0000
+#define ADC_RESULT_ADDRESS  0x00
+#define ADC_CONFIG_ADDRESS  0x02
+
+// set up ADC (no alert pin BUT need to float ADDR pin)
+void init_ADC() {
+  Serial.println("Initializing ADC...");
+  // set CycleTime to 3'b001 (contained in D[7:5]), keep remaining bits 0
+  // 8'b0010 0000 = 0x20
+  I2C_16Bit_writeToModule(ADC_BASE_ADDRESS, ADC_CONFIG_ADDRESS, 0x20);
+  uint16_t response = I2C_16Bit_readFromModule(ADC_BASE_ADDRESS, ADC_RESULT_ADDRESS);
+  if (response != 0) {
+    Serial.println("ADC initialized!");
+  }
+  else {
+    Serial.println("ADC failed initialization!");
+  }
+}
+
+
 /********************************************
   Helper Functions
 *********************************************/
@@ -120,11 +164,22 @@ void HighFrequencyTimerHandler()
 // service 60Hz PixyCam update
 void loop_pixycam_update(){
   Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
+
+  uint16_t result = pixy.getBlocks();
+  if (result) {
+    pixy_train_x = pixy.blocks[0].x;
+    pixy_train_y = pixy.blocks[0].y;
+  }
+  else {
+    Serial.println("PIXYCAM: didn't see a train!");
+  }
 }
 
 // service 60Hz rangefinder update
 void loop_rangefinder_update(){
   Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
+
+  
 }
 
 // service 240Hz position loop updates and update state!
@@ -189,6 +244,15 @@ void loop_position_update(){
 }
 
 
+/********************************************
+  TESTING
+*********************************************/
+
+#ifdef IN_TEST
+// tests go here...
+#endif
+
+
 
 /********************************************
   Setup and Loop
@@ -206,8 +270,17 @@ void setup() {
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
 
+  
+  // initialize I2C communications
+  I2C_16Bit_begin();
+  init_ADC();
 
-  // initialize PID parameters
+
+  // initialize PID parameters (TODO)
+  track_pitch_params = {};
+  track_yaw_params = {};
+  target_pitch_params = {};
+  target_yaw_params = {};
   
 
 
