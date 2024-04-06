@@ -173,13 +173,24 @@ void loop_pixycam_update(){
   else {
     Serial.println("PIXYCAM: didn't see a train!");
   }
+
+  // compute location of train in global coordinates
+  // TODO:
+  // - account for offset due to position of pixycam, rotation of the mount, etc.
+  // - do all the actual computation
 }
 
 // service 60Hz rangefinder update
 void loop_rangefinder_update(){
   Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
-  
+  distance_sensor_raw = I2C_16Bit_readFromModule(ADC_BASE_ADDRESS);
+
+  // convert raw measurement to distance measurement
+  double distance_sensor_volts = (double)(5.0 * distance_sensor_raw)/1024;
+
+  // TODO: implement interpolation
+  distance_train = 32.1351/(distance_sensor_volts - 0.41288);
 }
 
 // service 240Hz position loop updates and update state!
