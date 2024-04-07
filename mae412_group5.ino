@@ -8,6 +8,24 @@
  *
  *
  ********************************************/
+
+
+ // PINOUTS
+ // Physical pin    | Arduino pin number  | Isolator/Driver | Function
+ // 1               ~                       none?             RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
+ // 17              11                      buffer (1-way)    MOSI (ICSP)
+ // 18              12                      buffer (1-way)    MISO (ICSP)
+ // 19              13                      buffer (1-way)    SCK (ICSP)
+ // 27              A4                      opto (2-way)      SDA (i2c to ADC)
+ // 28              A5                      opto (2-way)      SCL (i2c)
+
+ // 1               ~                       none              RTS (for FTDI comms cable)
+ // 2               0                       none              TxD/Orange (FTDI)
+ // 3               1                       none              RxD/Yellow (FTDI)
+ // 7,8                                     none              Vcc/GND
+
+
+
  
  
  
@@ -292,6 +310,7 @@ void utest_loop_pixycam_update() {
 }
 void utest_loop_rangefinder_update() {
   Serial.println("Beginning loop_rangefinder_update test...");
+  init_ADC();
   Serial.println("\tPlace object 10cm from rangefinder, then send a byte!");
   while (!Serial.available()) {}
   Serial.read(); // flush
