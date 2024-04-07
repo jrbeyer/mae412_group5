@@ -256,11 +256,83 @@ void loop_position_update(){
 
 
 /********************************************
-  TESTING
+  UNIT TESTING
 *********************************************/
 
+// #define IN_TEST
 #ifdef IN_TEST
 // tests go here...
+
+void utest_loop_pixycam_update() {
+  Serial.println("Beginning loop_pixycam_update test...");
+
+  // TEST 1: Train in front of camera
+  Serial.println("\tPlace a train in front of pixycam, then send a byte!");
+  while (!Serial.available()) {}
+  Serial.read(); // flush
+
+  loop_pixycam_update();
+  if (pixy_train_x==0 || pixy_train_y==0) {
+    Serial.println("\tTEST FAILED: Pixycam didn't see train!");
+    return;
+  }
+  else {
+    Serial.println("\tGot (x, y) = (" + String(pixy_train_x) + ", " + String(pixy_train_y) + ")");
+  }
+
+
+  // TEST 2: No train in front of camera
+  Serial.println("\tRemove train from in front of pixycam, then send a byte!");
+  while (!Serial.available()) {}
+  Serial.read(); // flush
+
+  loop_pixycam_update();
+  Serial.println("\tIf message \"PIXYCAM: didn't see a train!\" didn't appear, then test failed!");
+
+}
+void utest_loop_rangefinder_update() {
+  Serial.println("Beginning loop_rangefinder_update test...");
+  Serial.println("\tPlace object 10cm from rangefinder, then send a byte!");
+  while (!Serial.available()) {}
+  Serial.read(); // flush
+
+  loop_rangefinder_update();
+  Serial.println("\tGot raw reading = " + String(distance_sensor_raw));
+  Serial.println("\tGot distance    = " + String(distance_train));
+
+}
+void utest_loop_position_update() {
+  Serial.println("Beginning loop_position_update test...");
+}
+
+
+void calibrate_rangefinder() {
+
+}
+
+
+
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial){}
+  delay(1000);
+  Serial.println("Beginning unit tests...");
+  
+  utest_loop_pixycam_update();
+  utest_loop_rangefinder_update();
+  utest_loop_position_update();
+
+
+  Serial.println("Testing complete!");
+}
+
+void loop() {
+  delay(5000);
+}
+
+
+
 #endif
 
 
@@ -268,6 +340,7 @@ void loop_position_update(){
 /********************************************
   Setup and Loop
 *********************************************/
+#ifndef IN_TEST
 
 void setup() {
   // put your setup code here, to run once:
@@ -347,3 +420,5 @@ void loop() {
     Serial.println("========\nNEW STATE: " + String(control_state) + "\n========\n");
   }
 }
+
+#endif
