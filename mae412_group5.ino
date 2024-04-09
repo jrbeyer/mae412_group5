@@ -13,9 +13,9 @@
  // PINOUTS
  // Physical pin    | Arduino pin number  | Isolator/Driver | Function
  // 1               ~                       none?             RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
- // 17              11                      buffer (1-way)    MOSI (ICSP)
- // 18              12                      buffer (1-way)    MISO (ICSP)
- // 19              13                      buffer (1-way)    SCK (ICSP)
+ // 17              11                      buffer (1-way)    MOSI (ICSP yellow)
+ // 18              12                      buffer (1-way)    MISO (ICSP orange)
+ // 19              13                      buffer (1-way)    SCK (ICSP brown)
  // 27              A4                      opto (2-way)      SDA (i2c to ADC)
  // 28              A5                      opto (2-way)      SCL (i2c)
 
@@ -182,15 +182,35 @@ void init_ADC() {
 // service 60Hz PixyCam update
 void loop_pixycam_update(){
   Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
+  // while (true) {
+  // uint16_t i = 0;
+  // uint16_t blocks = 0;
+  // uint16_t time = millis();
+  // while (!blocks) {
+  //   i++;
+  //   blocks = pixy.getBlocks();
+  // }
+  // time = millis() - time;
 
-  uint16_t result = pixy.getBlocks();
-  if (result) {
+  // Serial.println("Took " + String(i) + " grabs");
+  // delay(100);
+  // }
+
+  uint16_t watchdog = 0;
+  uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
+  uint16_t blocks = 0;
+  while (!blocks && watchdog < watchdog_max) {
+    watchdog++;
+    blocks = pixy.getBlocks();
+  }
+  if (blocks) {
     pixy_train_x = pixy.blocks[0].x;
     pixy_train_y = pixy.blocks[0].y;
   }
   else {
     Serial.println("PIXYCAM: didn't see a train!");
   }
+
 
   // compute location of train in global coordinates
   // TODO:
@@ -277,7 +297,7 @@ void loop_position_update(){
   UNIT TESTING
 *********************************************/
 
-// #define IN_TEST
+#define IN_TEST
 #ifdef IN_TEST
 // tests go here...
 
@@ -300,6 +320,7 @@ void utest_loop_pixycam_update() {
 
 
   // TEST 2: No train in front of camera
+  Serial.read();
   Serial.println("\tRemove train from in front of pixycam, then send a byte!");
   while (!Serial.available()) {}
   Serial.read(); // flush
@@ -335,6 +356,7 @@ void calibrate_rangefinder() {
 void setup() {
   Serial.begin(115200);
   while (!Serial){}
+  pixy.init();
   delay(1000);
   Serial.println("Beginning unit tests...");
   
@@ -377,6 +399,8 @@ void setup() {
   // initialize I2C communications
   I2C_16Bit_begin();
   init_ADC();
+
+  pixy.init();
 
 
   // initialize PID parameters (TODO)
