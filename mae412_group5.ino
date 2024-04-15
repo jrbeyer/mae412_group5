@@ -56,6 +56,7 @@
 #include <I2C_16Bit.h>
 #include <SPI.h>
 #include <Pixy.h>
+#include <VL53L0X.h>
 
 /********************************************
   Pin Defines
@@ -122,6 +123,7 @@ PID_params target_pitch_params;
 PID_params target_yaw_params;
 
 // External measurements
+VL53L0X  rangefinder;
 uint16_t distance_sensor_raw  = 0;    // ADC ticks, 0-1023
 double   distance_train       = 0.0;  // cm, 10-150
 Pixy pixy;
@@ -140,13 +142,14 @@ double train_y = 0.0;
 
 // highest-frequency clock
 // #define TIMER_FREQ_HZ 240.0
-#define TIMER_FREQ_HZ 1.0       // low-frequency for testing
+#define TIMER_FREQ_HZ 3.0       // low-frequency for testing
 // hanldes the 240 Hz timer
 void HighFrequencyTimerHandler()
 {
   // Doing something here inside ISR
   counter_new_val_available = true;
   counter_240_hz++;
+  Serial.print(".");
 }
 
 
@@ -195,15 +198,19 @@ void loop_pixycam_update(){
   // Serial.println("Took " + String(i) + " grabs");
   // delay(100);
   // }
-
+  Serial.println("test 1");
   uint16_t watchdog = 0;
   uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
   uint16_t blocks = 0;
   while (!blocks && watchdog < watchdog_max) {
+    Serial.println("test 2");
     watchdog++;
+    // delay(100);
     blocks = pixy.getBlocks();
   }
+  Serial.println("test 3");
   if (blocks) {
+    Serial.println("test 4");
     pixy_train_x = pixy.blocks[0].x;
     pixy_train_y = pixy.blocks[0].y;
   }
@@ -218,17 +225,21 @@ void loop_pixycam_update(){
   // - do all the actual computation
 }
 
+
+
+
 // service 60Hz rangefinder update
 void loop_rangefinder_update(){
   Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
-  distance_sensor_raw = I2C_16Bit_readFromModule(ADC_BASE_ADDRESS);
+  distance_sensor_raw = rangefinder.readRangeContinuousMillimeters();
+  distance_train = (double)distance_sensor_raw / 10.0;
 
-  // convert raw measurement to distance measurement
-  double distance_sensor_volts = (double)(5.0 * distance_sensor_raw)/1024;
+  // // convert raw measurement to distance measurement
+  // double distance_sensor_volts = (double)(5.0 * distance_sensor_raw)/1024;
 
-  // TODO: implement interpolation
-  distance_train = 32.1351/(distance_sensor_volts - 0.41288);
+  // // TODO: implement interpolation
+  // distance_train = 32.1351/(distance_sensor_volts - 0.41288);
 }
 
 // service 240Hz position loop updates and update state!
@@ -350,42 +361,18 @@ void calibrate_rangefinder() {
 
 }
 
-
-
-
-void setup() {
-  Serial.begin(115200);
-  while (!Serial){}
-  pixy.init();
-  delay(1000);
-  Serial.println("Beginning unit tests...");
-  
-  utest_loop_pixycam_update();
-  utest_loop_rangefinder_update();
-  utest_loop_position_update();
-
-
-  Serial.println("Testing complete!");
-}
-
-void loop() {
-  delay(5000);
-}
-
-
-
 #endif
-
 
 
 /********************************************
   Setup and Loop
 *********************************************/
-#ifndef IN_TEST
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
+  while (!Serial.available()){}
+  Wire.begin();
   delay(500);
 
   ITimer1.init();
@@ -397,10 +384,16 @@ void setup() {
 
   
   // initialize I2C communications
-  I2C_16Bit_begin();
-  init_ADC();
+  // I2C_16Bit_begin();
+  // init_ADC();
 
+  // initialize sensors
   pixy.init();
+  if (!rangefinder.init()) {
+    Serial.println("ERROR: Rangefinder not initialized");
+    while(true){}
+  }
+  rangefinder.startContinuous();
 
 
   // initialize PID parameters (TODO)
@@ -424,6 +417,18 @@ void setup() {
   pinMode(PIN_CTS_out, OUTPUT);
   pinMode(PIN_CTL_out, OUTPUT);
   pinMode(PIN_CTA_out, OUTPUT);
+
+
+  #ifdef IN_TEST
+  Serial.println("Beginning unit tests...");
+  utest_loop_pixycam_update();
+  utest_loop_rangefinder_update();
+  utest_loop_position_update();
+
+
+  Serial.println("Testing complete!");
+  while(true){delay(500);}
+  #endif
 
 }
 
@@ -464,4 +469,3 @@ void loop() {
   }
 }
 
-#endif
