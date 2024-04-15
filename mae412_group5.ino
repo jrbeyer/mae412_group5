@@ -38,14 +38,12 @@
 // Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system. 
 #define TIMER_INTERRUPT_DEBUG         0 
 #define _TIMERINTERRUPT_LOGLEVEL_     0 
-#define USE_TIMER_1     true 
+#define USE_TIMER_2     true 
 // To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
 #include "TimerInterrupt.h" 
 // To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
 #include "ISR_Timer.h" 
 
-// Select the timers you're using, here ITimer1
-#define USE_TIMER_1     true
 // end DO NOT TOUCH
 
 /********************************************
@@ -149,7 +147,7 @@ void HighFrequencyTimerHandler()
   // Doing something here inside ISR
   counter_new_val_available = true;
   counter_240_hz++;
-  Serial.print(".");
+  // Serial.print(".");
 }
 
 
@@ -198,19 +196,18 @@ void loop_pixycam_update(){
   // Serial.println("Took " + String(i) + " grabs");
   // delay(100);
   // }
-  Serial.println("test 1");
+  // Serial.println("test 1");
   uint16_t watchdog = 0;
   uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
   uint16_t blocks = 0;
   while (!blocks && watchdog < watchdog_max) {
-    Serial.println("test 2");
+    // Serial.println("test 2");
     watchdog++;
     // delay(100);
     blocks = pixy.getBlocks();
   }
-  Serial.println("test 3");
+
   if (blocks) {
-    Serial.println("test 4");
     pixy_train_x = pixy.blocks[0].x;
     pixy_train_y = pixy.blocks[0].y;
   }
@@ -316,9 +313,8 @@ void utest_loop_pixycam_update() {
   Serial.println("Beginning loop_pixycam_update test...");
 
   // TEST 1: Train in front of camera
-  Serial.println("\tPlace a train in front of pixycam, then send a byte!");
-  while (!Serial.available()) {}
-  Serial.read(); // flush
+  Serial.println("\tPlace a train in front of pixycam!");
+  delay(500);
 
   loop_pixycam_update();
   if (pixy_train_x==0 || pixy_train_y==0) {
@@ -331,15 +327,13 @@ void utest_loop_pixycam_update() {
 
 
   // TEST 2: No train in front of camera
-  Serial.read();
-  Serial.println("\tRemove train from in front of pixycam, then send a byte!");
-  while (!Serial.available()) {}
-  Serial.read(); // flush
+  Serial.println("\tRemove train from in front of pixycam!");
+  delay(500);
 
   loop_pixycam_update();
   Serial.println("\tIf message \"PIXYCAM: didn't see a train!\" didn't appear, then test failed!");
-
 }
+
 void utest_loop_rangefinder_update() {
   Serial.println("Beginning loop_rangefinder_update test...");
   init_ADC();
@@ -372,12 +366,14 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
   while (!Serial.available()){}
+  Serial.read(); // flush
+  Serial.flush();
   Wire.begin();
   delay(500);
 
-  ITimer1.init();
+  ITimer2.init();
   // Frequency in float Hz
-  if (ITimer1.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
+  if (ITimer2.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
     Serial.println("Starting  ITimer OK, millis() = " + String(millis()));
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
@@ -424,7 +420,6 @@ void setup() {
   utest_loop_pixycam_update();
   utest_loop_rangefinder_update();
   utest_loop_position_update();
-
 
   Serial.println("Testing complete!");
   while(true){delay(500);}
