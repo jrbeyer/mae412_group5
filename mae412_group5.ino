@@ -156,6 +156,13 @@ Pixy pixy;
 uint16_t pixy_train_x         = 0;    // pixels, 0-319
 uint16_t pixy_train_y         = 0;    // pixels, 0-199
 
+// stepper motor controllers
+BasicStepperDriver pixy_az(MOTOR_STEPS, P_pixy_az_dir, P_pixy_az_step, P_motor_enable);
+BasicStepperDriver pixy_el(MOTOR_STEPS, P_pixy_el_dir, P_pixy_el_step, P_motor_enable);
+// BasicStepperDriver laser_az(MOTOR_STEPS, P_laser_az_dir, P_laser_az_step, P_motor_enable);
+// BasicStepperDriver laser_el(MOTOR_STEPS, P_laser_el_dir, P_laser_el_step, P_motor_enable);
+
+
 // stepper motor feedback (TODO)
 
 // computed values
@@ -418,6 +425,22 @@ void setup() {
     while(true){}
   }
   rangefinder.startContinuous();
+
+  // initialize motor controllers
+  pixy_az.begin(RPM, MICROSTEPS);
+  pixy_el.begin(RPM, MICROSTEPS);
+  // laser_az.begin(RPM, MICROSTEPS);
+  // laser_el.begin(RPM, MICROSTEPS);
+
+  pixy_az.setEnableActiveState(LOW);
+  pixy_el.setEnableActiveState(LOW);
+  // laser_az.setEnableActiveState(LOW);
+  // laser_el.setEnableActiveState(LOW);
+
+  pixy_az.enable();
+  pixy_el.enable();
+  // laser_az.enable();
+  // laser_el.enable();
 
 
   // initialize PID parameters (TODO)
