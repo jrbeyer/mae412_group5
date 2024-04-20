@@ -159,8 +159,8 @@ uint16_t pixy_train_y         = 0;    // pixels, 0-199
 // stepper motor controllers
 BasicStepperDriver track_yaw(MOTOR_STEPS, P_track_yaw_dir, P_track_yaw_step, P_motor_enable);
 BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_step, P_motor_enable);
-// BasicStepperDriver laser_az(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
-// BasicStepperDriver laser_el(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
+// BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
+// BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
 
 
 // stepper motor feedback (TODO)
@@ -429,25 +429,68 @@ void setup() {
   // initialize motor controllers
   track_yaw.begin(RPM, MICROSTEPS);
   track_pitch.begin(RPM, MICROSTEPS);
-  // laser_az.begin(RPM, MICROSTEPS);
-  // laser_el.begin(RPM, MICROSTEPS);
+  // target_yaw.begin(RPM, MICROSTEPS);
+  // target_pitch.begin(RPM, MICROSTEPS);
 
   track_yaw.setEnableActiveState(LOW);
   track_pitch.setEnableActiveState(LOW);
-  // laser_az.setEnableActiveState(LOW);
-  // laser_el.setEnableActiveState(LOW);
+  // target_yaw.setEnableActiveState(LOW);
+  // target_pitch.setEnableActiveState(LOW);
 
   track_yaw.enable();
   track_pitch.enable();
-  // laser_az.enable();
-  // laser_el.enable();
+  // target_yaw.enable();
+  // target_pitch.enable();
 
-
-  // initialize PID parameters (TODO)
-  track_pitch_params = {};
-  track_yaw_params = {};
-  target_pitch_params = {};
-  target_yaw_params = {};
+  #define KP 1.0
+  #define KI 1.0
+  #define KD 1.0
+  #define INTEGRATOR_SAT 1.0
+  #define CLIP 1.0
+  track_pitch_params = {
+    .curr_target = 0.0,
+    .curr_error = 0.0,
+    .kp = KP,
+    .ki = KI,
+    .kd = KD,
+    .integrator = 0.0,
+    .integrator_sat = INTEGRATOR_SAT,
+    .prior_error = 0.0,
+    .clip = CLIP
+  };
+  track_yaw_params = {
+    .curr_target = 0.0,
+    .curr_error = 0.0,
+    .kp = KP,
+    .ki = KI,
+    .kd = KD,
+    .integrator = 0.0,
+    .integrator_sat = INTEGRATOR_SAT,
+    .prior_error = 0.0,
+    .clip = CLIP
+  };
+  target_pitch_params = {
+    .curr_target = 0.0,
+    .curr_error = 0.0,
+    .kp = KP,
+    .ki = KI,
+    .kd = KD,
+    .integrator = 0.0,
+    .integrator_sat = INTEGRATOR_SAT,
+    .prior_error = 0.0,
+    .clip = CLIP
+  };
+  target_yaw_params = {
+    .curr_target = 0.0,
+    .curr_error = 0.0,
+    .kp = KP,
+    .ki = KI,
+    .kd = KD,
+    .integrator = 0.0,
+    .integrator_sat = INTEGRATOR_SAT,
+    .prior_error = 0.0,
+    .clip = CLIP
+  };
   
 
 
