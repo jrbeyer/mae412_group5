@@ -46,15 +46,15 @@
  //                 A0/14 (same pin)        laser diode on/off
  //                 A1/15 (same pin)        Kill switch
  #define P_motor_enable 10
- #define P_pixy_az_dir  2
- #define P_pixy_az_step 3
- #define P_pixy_el_dir  4
- #define P_pixy_el_step 5
+ #define P_track_yaw_dir  2
+ #define P_track_yaw_step 3
+ #define P_track_pitch_dir  4
+ #define P_track_pitch_step 5
 
- #define P_laser_az_dir   6
- #define P_laser_az_step  7
- #define P_laser_el_dir   8
- #define P_laser_el_step  9
+ #define P_target_yaw_dir   6
+ #define P_target_yaw_step  7
+ #define P_target_pitch_dir   8
+ #define P_target_pitch_step  9
 
  #define P_laser_on       14
  #define P_kill_switch    15
@@ -157,10 +157,10 @@ uint16_t pixy_train_x         = 0;    // pixels, 0-319
 uint16_t pixy_train_y         = 0;    // pixels, 0-199
 
 // stepper motor controllers
-BasicStepperDriver pixy_az(MOTOR_STEPS, P_pixy_az_dir, P_pixy_az_step, P_motor_enable);
-BasicStepperDriver pixy_el(MOTOR_STEPS, P_pixy_el_dir, P_pixy_el_step, P_motor_enable);
-// BasicStepperDriver laser_az(MOTOR_STEPS, P_laser_az_dir, P_laser_az_step, P_motor_enable);
-// BasicStepperDriver laser_el(MOTOR_STEPS, P_laser_el_dir, P_laser_el_step, P_motor_enable);
+BasicStepperDriver track_yaw(MOTOR_STEPS, P_track_yaw_dir, P_track_yaw_step, P_motor_enable);
+BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_step, P_motor_enable);
+// BasicStepperDriver laser_az(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
+// BasicStepperDriver laser_el(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
 
 
 // stepper motor feedback (TODO)
@@ -427,18 +427,18 @@ void setup() {
   rangefinder.startContinuous();
 
   // initialize motor controllers
-  pixy_az.begin(RPM, MICROSTEPS);
-  pixy_el.begin(RPM, MICROSTEPS);
+  track_yaw.begin(RPM, MICROSTEPS);
+  track_pitch.begin(RPM, MICROSTEPS);
   // laser_az.begin(RPM, MICROSTEPS);
   // laser_el.begin(RPM, MICROSTEPS);
 
-  pixy_az.setEnableActiveState(LOW);
-  pixy_el.setEnableActiveState(LOW);
+  track_yaw.setEnableActiveState(LOW);
+  track_pitch.setEnableActiveState(LOW);
   // laser_az.setEnableActiveState(LOW);
   // laser_el.setEnableActiveState(LOW);
 
-  pixy_az.enable();
-  pixy_el.enable();
+  track_yaw.enable();
+  track_pitch.enable();
   // laser_az.enable();
   // laser_el.enable();
 
