@@ -9,24 +9,55 @@
  *
  ********************************************/
 
+/********************************************
+  Pin Defines
+*********************************************/
+// for testing
+#define PIN_kill_in 8
+#define PIN_VBTA_in 9
+#define PIN_PTF_in 10
+#define PIN_CTS_out 11
+#define PIN_CTL_out 12
+#define PIN_CTA_out 13
+// end for testing
+
 
  // PINOUTS
- // Physical pin    | Arduino pin number  | Isolator/Driver | Function
- // 1               ~                       none?             RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
- // 17              11                      buffer (1-way)    MOSI (ICSP yellow)
- // 18              12                      buffer (1-way)    MISO (ICSP orange)
- // 19              13                      buffer (1-way)    SCK (ICSP brown)
- // 27              A4                      opto (2-way)      SDA (i2c to ADC)
- // 28              A5                      opto (2-way)      SCL (i2c)
+ // Physical pin  | Arduino pin number    | Function
+ // 1               ~                       RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
+ // 17              11                      MOSI (ICSP yellow)
+ // 18              12                      MISO (ICSP orange)
+ // 19              13                      SCK (ICSP brown)
+ // 27              A4                      SDA (i2c to ADC)
+ // 28              A5                      SCL (i2c)
+ // NOTE: no pin defines needed for this block (taken care of by libraries)
 
- // 1               ~                       none              RTS (for FTDI comms cable)
- // 2               0                       none              TxD/Orange (FTDI)
- // 3               1                       none              RxD/Yellow (FTDI)
- // 7,8                                     none              Vcc/GND
+ // 1               ~                       RTS (for FTDI comms cable)
+ // 2               0                       TxD/Orange (FTDI)
+ // 3               1                       RxD/Yellow (FTDI)
+ // 7,8                                     Vcc/GND
+ // NOTE: no pin defines needed for this block
 
+ //                 10                      stepper enable
+ //                 2,3                     pixy az dir,step
+ //                 4,5                     pixy el dir,step
+ //                 6,7                     laser az dir,step
+ //                 8,9                     laser el dir,step
+ //                 A0/14 (same pin)        laser diode on/off
+ //                 A1/15 (same pin)        Kill switch
+ #define P_motor_enable 10
+ #define P_pixy_az_dir  2
+ #define P_pixy_az_step 3
+ #define P_pixy_el_dir  4
+ #define P_pixy_el_step 5
 
+ #define P_laser_az_dir   6
+ #define P_laser_az_step  7
+ #define P_laser_el_dir   8
+ #define P_laser_el_step  9
 
- 
+ #define P_laser_on       14
+ #define P_kill_switch    15
  
  
 /********************************************
@@ -47,6 +78,18 @@
 // end DO NOT TOUCH
 
 /********************************************
+ Stepper driver things (mostly from docs)
+*********************************************/
+// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
+#define MOTOR_STEPS 200
+#define RPM 120 //TODO: is this what value we want?
+// Since microstepping is set externally, make sure this matches the selected mode
+// If it doesn't, the motor will move at a different RPM than chosen
+// 1=full step, 2=half step etc.
+#define MICROSTEPS 1
+
+
+/********************************************
   Libraries
 *********************************************/
 
@@ -55,22 +98,7 @@
 #include <SPI.h>
 #include <Pixy.h>
 #include <VL53L0X.h>
-
-/********************************************
-  Pin Defines
-*********************************************/
-// for testing
-#define PIN_kill_in 8
-#define PIN_VBTA_in 9
-#define PIN_PTF_in 10
-#define PIN_CTS_out 11
-#define PIN_CTL_out 12
-#define PIN_CTA_out 13
-// end for testing
-
-// I2C Pins (TODO)
-#define PIN_I2C_SDA -1
-#define PIN_I2C_SCL -1
+#include "BasicStepperDriver.h"
 
 
 /********************************************
@@ -398,21 +426,6 @@ void setup() {
   target_pitch_params = {};
   target_yaw_params = {};
   
-
-
-// #define PIN_kill_in 8
-// #define PIN_VBTA_in 9
-// #define PIN_PTF_in 10
-// #define PIN_CTS_out 11
-// #define PIN_CTL_out 12
-// #define PIN_CTA_out 13
-
-  pinMode(PIN_kill_in, INPUT);
-  pinMode(PIN_VBTA_in, INPUT);
-  pinMode(PIN_PTF_in, INPUT);
-  pinMode(PIN_CTS_out, OUTPUT);
-  pinMode(PIN_CTL_out, OUTPUT);
-  pinMode(PIN_CTA_out, OUTPUT);
 
 
   #ifdef IN_TEST
