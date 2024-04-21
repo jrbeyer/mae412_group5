@@ -182,7 +182,6 @@ void HighFrequencyTimerHandler()
   // Doing something here inside ISR
   counter_new_val_available = true;
   counter_240_hz++;
-  // Serial.print(".");
 }
 
 
@@ -266,12 +265,33 @@ void loop_rangefinder_update(){
 
   distance_sensor_raw = rangefinder.readRangeContinuousMillimeters();
   distance_train = (double)distance_sensor_raw / 10.0;
+}
 
-  // // convert raw measurement to distance measurement
-  // double distance_sensor_volts = (double)(5.0 * distance_sensor_raw)/1024;
-
-  // // TODO: implement interpolation
-  // distance_train = 32.1351/(distance_sensor_volts - 0.41288);
+// generic PID execution functions (can execute once for each stepper motor)
+#define CONTROL_PERIOD (1.0 / TIMER_FREQ_HZ)
+void execute_PID(PID_params* params, BasicStepperDriver* driver) {
+  // update integrator
+  params->integrator += params->curr_error;
+  if (params->integrator >= params->integrator_sat) {
+    params->integrator = params->integrator_sat;
+  }
+  else if (params->integrator <= -params->integrator_sat) {
+    params->integrator = -params->integrator_sat;
+  }
+  // PID lead out
+  double command =  (params->kp * params->curr_error) 
+                  + (params->kd * (params->curr_error - params->prior_error)/CONTROL_PERIOD) 
+                  + (params->ki * params->integrator * CONTROL_PERIOD);
+  // update priors and clip command
+  params->prior_error = params->curr_error;
+  if (command >= params->clip) {
+    command = params->clip;
+  }
+  else if (command <= -params->clip) {
+    command = -params->clip;
+  }
+  // issue command
+  driver->move((long)command);
 }
 
 // service 240Hz position loop updates and update state!
@@ -333,6 +353,17 @@ void loop_position_update(){
   }
 
   // execute control calculations
+
+  // pixycam control update
+  // TODO: may need to invert due to upside-down mounting
+  // TODO: gate these based on CTRL_tracking_search/lock
+  // TODO: these aren't right, need to update when we have encoder readings
+  track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
+  track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
+  execute_PID(&track_yaw_params, &track_yaw);
+  execute_PID(&track_pitch_params, &track_pitch);
+
+  // laser pointer control update
 }
 
 
@@ -432,6 +463,7 @@ void setup() {
   // target_yaw.begin(RPM, MICROSTEPS);
   // target_pitch.begin(RPM, MICROSTEPS);
 
+  
   track_yaw.setEnableActiveState(LOW);
   track_pitch.setEnableActiveState(LOW);
   // target_yaw.setEnableActiveState(LOW);
