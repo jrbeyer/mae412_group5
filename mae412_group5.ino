@@ -39,22 +39,22 @@
  // NOTE: no pin defines needed for this block
 
  //                 10                      stepper enable
- //                 2,3                     pixy az dir,step
- //                 4,5                     pixy el dir,step
- //                 6,7                     laser az dir,step
- //                 8,9                     laser el dir,step
+ //                 8,9                     track yaw dir,step
+ //                 6,7                     track pitch dir,step
+ //                 4,5                     target yaw dir,step
+ //                 2,3                     target pitch dir,step
  //                 A0/14 (same pin)        laser diode on/off
  //                 A1/15 (same pin)        Kill switch
  #define P_motor_enable 10
- #define P_track_yaw_dir  2
- #define P_track_yaw_step 3
- #define P_track_pitch_dir  4
- #define P_track_pitch_step 5
+ #define P_track_yaw_dir  8
+ #define P_track_yaw_step 9
+ #define P_track_pitch_dir  6
+ #define P_track_pitch_step 7
 
- #define P_target_yaw_dir   6
- #define P_target_yaw_step  7
- #define P_target_pitch_dir   8
- #define P_target_pitch_step  9
+ #define P_target_yaw_dir   4
+ #define P_target_yaw_step  5
+ #define P_target_pitch_dir   2
+ #define P_target_pitch_step  3
 
  #define P_laser_on       14
  #define P_kill_switch    15
@@ -175,7 +175,7 @@ double train_y = 0.0;
 
 // highest-frequency clock
 // #define TIMER_FREQ_HZ 240.0
-#define TIMER_FREQ_HZ 3.0       // low-frequency for testing
+#define TIMER_FREQ_HZ 25.0       // low-frequency for testing
 // hanldes the 240 Hz timer
 void HighFrequencyTimerHandler()
 {
@@ -269,7 +269,7 @@ void loop_rangefinder_update(){
 
 // generic PID execution functions (can execute once for each stepper motor)
 #define CONTROL_PERIOD (1.0 / TIMER_FREQ_HZ)
-void execute_PID(PID_params* params, BasicStepperDriver* driver) {
+void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   // update integrator
   params->integrator += params->curr_error;
   if (params->integrator >= params->integrator_sat) {
@@ -292,6 +292,14 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver) {
   }
   // issue command
   driver->move((long)command);
+  
+  if (i%10 == 0) {
+    Serial.println("Executed PID loop, new params: ");
+    Serial.println("\tError:      " + String(params->curr_error));
+    Serial.println("\tLast Error: " + String(params->prior_error));
+    Serial.println("\tIntegrator: " + String(params->integrator));
+    Serial.println("\tCommand:    " + String(command));
+  }
 }
 
 // service 240Hz position loop updates and update state!
@@ -360,8 +368,8 @@ void loop_position_update(){
   // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
   track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-  execute_PID(&track_yaw_params, &track_yaw);
-  execute_PID(&track_pitch_params, &track_pitch);
+  execute_PID(&track_yaw_params, &track_yaw, 1);
+  execute_PID(&track_pitch_params, &track_pitch, 1);
 
   // laser pointer control update
 }
@@ -412,6 +420,31 @@ void utest_loop_rangefinder_update() {
   Serial.println("\tGot distance    = " + String(distance_train));
 
 }
+
+void utest_execute_PID() {
+  Serial.println("Beginning loop_position_update test...");
+  Serial.println("Setting error to 1.0...");
+  track_yaw_params.curr_error = 1.0;
+  for (int i = 0; i < 100; i++) {
+    execute_PID(&track_yaw_params, &track_yaw, i);
+    delay((long)CONTROL_PERIOD * 1000);
+  }
+  
+  Serial.println("Setting error to 0.0...");
+  track_yaw_params.curr_error = 0.0;
+  for (int i = 0; i < 100; i++) {
+    execute_PID(&track_yaw_params, &track_yaw, i);
+    delay((long)CONTROL_PERIOD * 1000);
+  }
+
+  Serial.println("Setting error to -0.5...");
+  track_yaw_params.curr_error = -0.5;
+  for (int i = 0; i < 100; i++) {
+    execute_PID(&track_yaw_params, &track_yaw, i);
+    delay((long)CONTROL_PERIOD * 1000);
+  }
+}
+
 void utest_loop_position_update() {
   Serial.println("Beginning loop_position_update test...");
 }
@@ -450,12 +483,12 @@ void setup() {
   // init_ADC();
 
   // initialize sensors
-  pixy.init();
-  if (!rangefinder.init()) {
-    Serial.println("ERROR: Rangefinder not initialized");
-    while(true){}
-  }
-  rangefinder.startContinuous();
+  // pixy.init();
+  // if (!rangefinder.init()) {
+  //   Serial.println("ERROR: Rangefinder not initialized");
+  //   while(true){}
+  // }
+  // rangefinder.startContinuous();
 
   // initialize motor controllers
   track_yaw.begin(RPM, MICROSTEPS);
@@ -474,11 +507,11 @@ void setup() {
   // target_yaw.enable();
   // target_pitch.enable();
 
-  #define KP 1.0
-  #define KI 1.0
+  #define KP 9.0
+  #define KI 12.0
   #define KD 1.0
-  #define INTEGRATOR_SAT 1.0
-  #define CLIP 1.0
+  #define INTEGRATOR_SAT 4.0
+  #define CLIP 40.0
   track_pitch_params = {
     .curr_target = 0.0,
     .curr_error = 0.0,
@@ -528,9 +561,10 @@ void setup() {
 
   #ifdef IN_TEST
   Serial.println("Beginning unit tests...");
-  utest_loop_pixycam_update();
-  utest_loop_rangefinder_update();
-  utest_loop_position_update();
+  // utest_loop_pixycam_update();
+  // utest_loop_rangefinder_update();
+  // utest_loop_position_update();
+  utest_execute_PID();
 
   Serial.println("Testing complete!");
   while(true){delay(500);}
