@@ -175,7 +175,7 @@ double train_y = 0.0;
 
 // highest-frequency clock
 // #define TIMER_FREQ_HZ 240.0
-#define TIMER_FREQ_HZ 25.0       // low-frequency for testing
+#define TIMER_FREQ_HZ 100.0       // low-frequency for testing
 // hanldes the 240 Hz timer
 void HighFrequencyTimerHandler()
 {
@@ -216,7 +216,7 @@ void init_ADC() {
 
 // service 60Hz PixyCam update
 void loop_pixycam_update(){
-  Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
+  // Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
   // while (true) {
   // uint16_t i = 0;
   // uint16_t blocks = 0;
@@ -261,10 +261,17 @@ void loop_pixycam_update(){
 
 // service 60Hz rangefinder update
 void loop_rangefinder_update(){
-  Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
+  // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
   distance_sensor_raw = rangefinder.readRangeContinuousMillimeters();
   distance_train = (double)distance_sensor_raw / 10.0;
+}
+
+// reset PID parameters so motors don't go crazy
+void reset_PID(PID_params* params) {
+  params->integrator = 0.0;
+  params->curr_error = 0.0;
+  params->prior_error = 0.0;
 }
 
 // generic PID execution functions (can execute once for each stepper motor)
@@ -304,7 +311,11 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
 
 // service 240Hz position loop updates and update state!
 void loop_position_update(){
-  Serial.println("executed position update, counter: " + String(counter_240_hz));
+  // Serial.println("executed position update, counter: " + String(counter_240_hz));
+
+  // Serial.println("\tcalling pixy.getblocks() as dummy...");
+  // pixy.getBlocks();
+  // Serial.println("\tgot it");
 
   // update state
   State next_state = STATE_inactive;
@@ -340,6 +351,8 @@ void loop_position_update(){
       }
       break;
   }
+  // TODO :!!!!!!!!!!!!!!!!! TESTING:
+  next_state = STATE_lock;
   control_state = next_state;
   // update outputs from state machine
   switch (control_state) {
@@ -367,9 +380,9 @@ void loop_position_update(){
   // TODO: gate these based on CTRL_tracking_search/lock
   // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
-  track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-  execute_PID(&track_yaw_params, &track_yaw, 1);
-  execute_PID(&track_pitch_params, &track_pitch, 1);
+  // track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
+  execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
+  // execute_PID(&track_pitch_params, &track_pitch, 1);
 
   // laser pointer control update
 }
@@ -379,7 +392,7 @@ void loop_position_update(){
   UNIT TESTING
 *********************************************/
 
-#define IN_TEST
+// #define IN_TEST
 #ifdef IN_TEST
 // tests go here...
 
@@ -443,6 +456,13 @@ void utest_execute_PID() {
     execute_PID(&track_yaw_params, &track_yaw, i);
     delay((long)CONTROL_PERIOD * 1000);
   }
+
+  Serial.println("Resetting PID parameters...");
+  reset_PID(&track_yaw_params);
+  for (int i = 0; i < 100; i++) {
+    execute_PID(&track_yaw_params, &track_yaw, i);
+    delay((long)CONTROL_PERIOD * 1000);
+  }  
 }
 
 void utest_loop_position_update() {
@@ -483,7 +503,7 @@ void setup() {
   // init_ADC();
 
   // initialize sensors
-  // pixy.init();
+  pixy.init();
   // if (!rangefinder.init()) {
   //   Serial.println("ERROR: Rangefinder not initialized");
   //   while(true){}
@@ -507,10 +527,10 @@ void setup() {
   // target_yaw.enable();
   // target_pitch.enable();
 
-  #define KP 9.0
-  #define KI 12.0
-  #define KD 1.0
-  #define INTEGRATOR_SAT 4.0
+  #define KP 0.025
+  #define KI 0.05
+  #define KD 0.01
+  #define INTEGRATOR_SAT 10.0
   #define CLIP 40.0
   track_pitch_params = {
     .curr_target = 0.0,
@@ -564,7 +584,8 @@ void setup() {
   // utest_loop_pixycam_update();
   // utest_loop_rangefinder_update();
   // utest_loop_position_update();
-  utest_execute_PID();
+  // utest_execute_PID();
+
 
   Serial.println("Testing complete!");
   while(true){delay(500);}
@@ -576,13 +597,13 @@ void loop() {
   // put your main code here, to run repeatedly:
 
   // for testing
-  VB_train_available  = digitalRead(PIN_VBTA_in);
-  PC_train_found      = digitalRead(PIN_PTF_in);
-  EXT_kill            = digitalRead(PIN_kill_in);
-  digitalWrite(PIN_CTS_out, CTRL_tracking_search);
-  digitalWrite(PIN_CTL_out, CTRL_tracking_lock);
-  digitalWrite(PIN_CTA_out, CTRL_targeting_active);
-  delay(10);
+  // VB_train_available  = digitalRead(PIN_VBTA_in);
+  // PC_train_found      = digitalRead(PIN_PTF_in);
+  // EXT_kill            = digitalRead(PIN_kill_in);
+  // digitalWrite(PIN_CTS_out, CTRL_tracking_search);
+  // digitalWrite(PIN_CTL_out, CTRL_tracking_lock);
+  // digitalWrite(PIN_CTA_out, CTRL_targeting_active);
+  // delay(10);
   // end for testing
 
 
@@ -598,14 +619,14 @@ void loop() {
       case 1:
         break;
       case 2:
-        loop_rangefinder_update();
+        // loop_rangefinder_update();
         break;
       case 3:
         break;
     }
     // always execute position loops
     loop_position_update();
-    Serial.println("========\nNEW STATE: " + String(control_state) + "\n========\n");
+    // Serial.println("========\nNEW STATE: " + String(control_state) + "\n========\n");
   }
 }
 
