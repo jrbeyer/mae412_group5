@@ -175,7 +175,7 @@ double train_y = 0.0;
 
 // highest-frequency clock
 // #define TIMER_FREQ_HZ 240.0
-#define TIMER_FREQ_HZ 100.0       // low-frequency for testing
+#define TIMER_FREQ_HZ 120.0       // low-frequency for testing
 // hanldes the 240 Hz timer
 void HighFrequencyTimerHandler()
 {
@@ -380,9 +380,9 @@ void loop_position_update(){
   // TODO: gate these based on CTRL_tracking_search/lock
   // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
-  // track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
+  track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
   execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
-  // execute_PID(&track_pitch_params, &track_pitch, 1);
+  execute_PID(&track_pitch_params, &track_pitch, 1);
 
   // laser pointer control update
 }
@@ -483,10 +483,6 @@ void calibrate_rangefinder() {
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(115200);
-  while (!Serial.available()){}
-  Serial.read(); // flush
-  Serial.flush();
   Wire.begin();
   delay(500);
 
@@ -522,15 +518,22 @@ void setup() {
   // target_yaw.setEnableActiveState(LOW);
   // target_pitch.setEnableActiveState(LOW);
 
+  track_yaw.disable();
+  track_pitch.disable();
+  Serial.begin(115200);
+  while (!Serial.available()){}
+  Serial.read(); // flush
+  Serial.flush();
+
   track_yaw.enable();
   track_pitch.enable();
   // target_yaw.enable();
   // target_pitch.enable();
 
   #define KP 0.025
-  #define KI 0.05
-  #define KD 0.01
-  #define INTEGRATOR_SAT 10.0
+  #define KI 0.5
+  #define KD 0.001
+  #define INTEGRATOR_SAT 100.0
   #define CLIP 40.0
   track_pitch_params = {
     .curr_target = 0.0,
