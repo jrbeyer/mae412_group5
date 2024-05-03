@@ -69,12 +69,8 @@
 // Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system. 
 #define TIMER_INTERRUPT_DEBUG         0 
 #define _TIMERINTERRUPT_LOGLEVEL_     0 
-#define USE_TIMER_2     true 
 // To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
-#include "TimerInterrupt.h" 
-// To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
-#include "ISR_Timer.h" 
-
+#include "TimerInterrupt_Generic.h" 
 // end DO NOT TOUCH
 
 /********************************************
@@ -128,6 +124,8 @@ typedef struct PID_params {
   Global Variables
 *********************************************/
 
+ESP32Timer ITimer1(1);
+
 // counter
 volatile uint16_t counter_240_hz = 0;             // counts 240Hz timer increments
 volatile bool counter_new_val_available = false;  // asserted in timer ISR to tell loop that new counter is ready
@@ -177,11 +175,12 @@ double train_y = 0.0;
 // #define TIMER_FREQ_HZ 240.0
 #define TIMER_FREQ_HZ 120.0       // low-frequency for testing
 // hanldes the 240 Hz timer
-void HighFrequencyTimerHandler()
+bool HighFrequencyTimerHandler(void* timerNo)
 {
   // Doing something here inside ISR
   counter_new_val_available = true;
   counter_240_hz++;
+  return true;
 }
 
 
@@ -486,9 +485,8 @@ void setup() {
   Wire.begin();
   delay(500);
 
-  ITimer2.init();
   // Frequency in float Hz
-  if (ITimer2.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
+  if (ITimer1.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
     Serial.println("Starting  ITimer OK, millis() = " + String(millis()));
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
