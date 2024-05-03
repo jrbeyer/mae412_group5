@@ -102,8 +102,6 @@
 #include <WiFi.h>
 
 #include "mae412_group5_defines.h"
-#include "mae412_group5_utests.h"
-
 
 /********************************************
   Typedefs
@@ -408,6 +406,8 @@ void loop_position_update(){
 /********************************************
   Setup and Loop
 *********************************************/
+
+#include "mae412_group5_utests.h"
 
 void setup() {
   // put your setup code here, to run once:
