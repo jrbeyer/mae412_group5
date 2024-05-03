@@ -39,17 +39,17 @@
  // NOTE: no pin defines needed for this block
 
  //                 10                      stepper enable
- //                 8,9                     track yaw dir,step
- //                 6,7                     track pitch dir,step
+ //                 6,7                     track yaw dir,step
+ //                 8,9                     track pitch dir,step
  //                 4,5                     target yaw dir,step
  //                 2,3                     target pitch dir,step
  //                 A0/14 (same pin)        laser diode on/off
  //                 A1/15 (same pin)        Kill switch
  #define P_motor_enable 10
- #define P_track_yaw_dir  8
- #define P_track_yaw_step 9
- #define P_track_pitch_dir  6
- #define P_track_pitch_step 7
+ #define P_track_yaw_dir  6 
+ #define P_track_yaw_step 7 
+ #define P_track_pitch_dir  8// TODO: change pin to avoid I2C conflict
+ #define P_track_pitch_step 9// TODO: change pin to avoid I2C conflict
 
  #define P_target_yaw_dir   4
  #define P_target_yaw_step  5
@@ -78,7 +78,7 @@
 *********************************************/
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 200
-#define RPM 120 //TODO: is this what value we want?
+#define RPM 100 //TODO: is this what value we want?
 // Since microstepping is set externally, make sure this matches the selected mode
 // If it doesn't, the motor will move at a different RPM than chosen
 // 1=full step, 2=half step etc.
@@ -464,6 +464,125 @@ void utest_execute_PID() {
   }  
 }
 
+void utest_stepper_motor() {
+  Serial.println("Stepper motor unit tests...");
+  delay(4000);
+  int i;
+  int max = 20;
+  int step = 1;
+  int del = 50;
+
+  // delay testing
+  if (1) {
+    max = 40;
+    for (del = 6; del >= 2; del -= 2) {
+      delay(1000);
+      step = 1;
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
+        track_yaw.move(step);
+        delay(del);
+      }
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
+        track_yaw.move(-step);
+        delay(del);
+      }
+      delay(1000);
+      step = 5;
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
+        track_yaw.move(step);
+        delay(del);
+      }
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
+        track_yaw.move(-step);
+        delay(del);
+      }
+      delay(1000);
+      step = 10;
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
+        track_yaw.move(step);
+        delay(del);
+      }
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
+        track_yaw.move(-step);
+        delay(del);
+      }
+    }
+  }
+
+  // open loop positioning test
+  if (0){
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(step) + "\t" + String(i));
+    track_yaw.move(step);
+    delay(del);
+  }
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(-step) + "\t" + String(i));
+    track_yaw.move(-step);
+    delay(del);
+  }
+  delay(1000);
+  step = 2;  
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(step) + "\t" + String(i));
+    track_yaw.move(step);
+    delay(del);
+  }
+    for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(-step) + "\t" + String(i));
+    track_yaw.move(-step);
+    delay(del);
+  }
+  delay(1000);
+  step = 5;  
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(step) + "\t" + String(i));
+    track_yaw.move(step);
+    delay(del);
+  }
+    for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(-step) + "\t" + String(i));
+    track_yaw.move(-step);
+    delay(del);
+  }
+  delay(1000);
+  step = 5;  
+  max = 40;
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(step) + "\t" + String(i));
+    track_yaw.move(step);
+    delay(del);
+  }
+    for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(-step) + "\t" + String(i));
+    track_yaw.move(-step);
+    delay(del);
+  }
+  delay(1000);
+  step = 5;  
+  max = 40;
+  del = 10;
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(-step) + "\t" + String(i));
+    track_yaw.move(-step);
+    delay(del);
+  }
+  for (i = 0; i < max; i++) {
+    Serial.println("step: " + String(step) + "\t" + String(i));
+    track_yaw.move(step);
+    delay(del);
+  }
+  }
+
+  delay(100);
+}
+
 void utest_loop_position_update() {
   Serial.println("Beginning loop_position_update test...");
 }
@@ -586,8 +705,10 @@ void setup() {
   // utest_loop_rangefinder_update();
   // utest_loop_position_update();
   // utest_execute_PID();
+  // utest_stepper_motor();
 
 
+  track_yaw.disable();
   Serial.println("Testing complete!");
   while(true){delay(500);}
   #endif
