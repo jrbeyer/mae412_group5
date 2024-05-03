@@ -58,6 +58,8 @@
 
  #define P_laser_on       14
  #define P_kill_switch    15
+
+ #define PIN_LED 15
  
  
 /********************************************
@@ -128,6 +130,46 @@ typedef struct PID_params {
 /********************************************
   Global Variables
 *********************************************/
+
+// ESP NOW
+// message passing
+String success;
+message_S inbound_message;
+
+// configure ESP NOW
+esp_now_peer_info_t peerInfo;
+// callback for data sent
+// shouldn't be sending data
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  if (status == 0){
+    success = "Delivery Success :)";
+  }
+  else{
+    success = "Delivery Fail :(";
+  }
+}
+// Callback when data is received
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&inbound_message, incomingData, sizeof(inbound_message));
+  // Serial.print("Bytes received: ");
+  // Serial.println(len);
+  // if (inbound_message.pixy_saw_train) {
+  //     Serial.println("Got train! clearing this flag...");
+  //     inbound_message.pixy_saw_train = false;
+
+  //     Serial.println("train_x: " + String(inbound_message.pixy_train_x));
+  //     Serial.println("train_y: " + String(inbound_message.pixy_train_y));
+  //   }
+  //   if (inbound_message.rangefinder_got_range) {
+  //     Serial.println("Got distance! clearing this flag...");
+  //     inbound_message.rangefinder_got_range = false;
+
+  //     Serial.println("distance (mm): " + String(inbound_message.rangefinder_range_mm));
+  //   }
+}
+
 
 ESP32Timer ITimer1(1);
 
@@ -220,39 +262,43 @@ void init_ADC() {
 
 // service 60Hz PixyCam update
 void loop_pixycam_update(){
-  // Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
-  // while (true) {
-  // uint16_t i = 0;
+  // // Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
+  // // while (true) {
+  // // uint16_t i = 0;
+  // // uint16_t blocks = 0;
+  // // uint16_t time = millis();
+  // // while (!blocks) {
+  // //   i++;
+  // //   blocks = pixy.getBlocks();
+  // // }
+  // // time = millis() - time;
+
+  // // Serial.println("Took " + String(i) + " grabs");
+  // // delay(100);
+  // // }
+  // // Serial.println("test 1");
+  // uint16_t watchdog = 0;
+  // uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
   // uint16_t blocks = 0;
-  // uint16_t time = millis();
-  // while (!blocks) {
-  //   i++;
+  // while (!blocks && watchdog < watchdog_max) {
+  //   // Serial.println("test 2");
+  //   watchdog++;
+  //   // delay(100);
   //   blocks = pixy.getBlocks();
   // }
-  // time = millis() - time;
 
-  // Serial.println("Took " + String(i) + " grabs");
-  // delay(100);
+  // if (blocks) {
+  //   pixy_train_x = pixy.blocks[0].x;
+  //   pixy_train_y = pixy.blocks[0].y;
   // }
-  // Serial.println("test 1");
-  uint16_t watchdog = 0;
-  uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
-  uint16_t blocks = 0;
-  while (!blocks && watchdog < watchdog_max) {
-    // Serial.println("test 2");
-    watchdog++;
-    // delay(100);
-    blocks = pixy.getBlocks();
-  }
+  // else {
+  //   Serial.println("PIXYCAM: didn't see a train!");
+  // }
 
-  if (blocks) {
-    pixy_train_x = pixy.blocks[0].x;
-    pixy_train_y = pixy.blocks[0].y;
+  if (inbound_message.pixy_saw_train) {
+    pixy_train_x = inbound_message.pixy_train_x;
+    pixy_train_y = inbound_message.pixy_train_y;
   }
-  else {
-    Serial.println("PIXYCAM: didn't see a train!");
-  }
-
 
   // compute location of train in global coordinates
   // TODO:
@@ -588,6 +634,25 @@ void utest_stepper_motor() {
   delay(100);
 }
 
+void utest_receive_esp_now() {
+  Serial.println("Starting ESP NOW unit test...");
+  while (true) {
+    if (inbound_message.pixy_saw_train) {
+      Serial.println("Got train! clearing this flag...");
+      inbound_message.pixy_saw_train = false;
+
+      Serial.println("train_x: " + String(inbound_message.pixy_train_x));
+      Serial.println("train_y: " + String(inbound_message.pixy_train_y));
+    }
+    if (inbound_message.rangefinder_got_range) {
+      Serial.println("Got distance! clearing this flag...");
+      inbound_message.rangefinder_got_range = false;
+
+      Serial.println("distance (mm): " + String(inbound_message.rangefinder_range_mm));
+    }
+  }
+}
+
 void utest_loop_position_update() {
   Serial.println("Beginning loop_position_update test...");
 }
@@ -608,6 +673,42 @@ void setup() {
   // put your setup code here, to run once:
   Wire.begin();
   delay(500);
+  WiFi.mode(WIFI_STA);
+  delay(5000);
+
+  // Init ESP-NOW
+  // slow flash is bad
+  pinMode(PIN_LED, OUTPUT);
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    while (true) {
+      delay(200);
+      digitalWrite(PIN_LED, LOW);
+      delay(200);
+      digitalWrite(PIN_LED, HIGH);
+    }
+  }
+  // Once ESPNow is successfully Init, we will register for Send CB to
+  // get the status of Trasnmitted packet
+  esp_now_register_send_cb(OnDataSent);
+  
+  // Register peer
+  memcpy(peerInfo.peer_addr, pixyESPAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  
+  // Add peer        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+  // Register for a callback function that will be called when data is received
+  esp_now_register_recv_cb(OnDataRecv);
+
+  // blue light on when done with ESP NOW config
+  digitalWrite(PIN_LED, HIGH);
+
+
 
   // Frequency in float Hz
   if (ITimer1.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
@@ -621,7 +722,7 @@ void setup() {
   // init_ADC();
 
   // initialize sensors
-  pixy.init();
+  // pixy.init();
   // if (!rangefinder.init()) {
   //   Serial.println("ERROR: Rangefinder not initialized");
   //   while(true){}
@@ -711,6 +812,7 @@ void setup() {
   // utest_loop_position_update();
   // utest_execute_PID();
   // utest_stepper_motor();
+  utest_receive_esp_now();
 
 
   track_yaw.disable();

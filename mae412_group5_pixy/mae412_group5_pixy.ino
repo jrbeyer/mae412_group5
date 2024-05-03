@@ -23,6 +23,11 @@
 // defines
 #define PIN_LED 15
 
+// sensors
+Pixy pixy;
+VL53L0X rangefinder;
+
+
 // message passing
 String success;
 message_S outbound_message;
@@ -54,7 +59,48 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   // Serial.println("Received: " + String(inboundCounter));
 }
 
+
+
+void loop_pixycam_update(){
+  uint16_t watchdog = 0;
+  uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
+  uint16_t blocks = 0;
+  while (!blocks && watchdog < watchdog_max) {
+    // Serial.println("test 2");
+    watchdog++;
+    // delay(100);
+    blocks = pixy.getBlocks();
+  }
+
+  if (blocks) {
+    outbound_message.pixy_saw_train = true;
+    outbound_message.pixy_train_x = pixy.blocks[0].x;
+    outbound_message.pixy_train_y = pixy.blocks[0].y;
+  }
+  else {
+    outbound_message.pixy_saw_train = false;
+    Serial.println("PIXYCAM: didn't see a train!");
+  }
+}
+
+
+// service 60Hz rangefinder update
+void loop_rangefinder_update(){
+  // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
+
+  outbound_message.rangefinder_range_mm = rangefinder.readRangeContinuousMillimeters();
+  // define a good reading with 50 cm
+  if (outbound_message.rangefinder_range_mm > 5000 || outbound_message.rangefinder_range_mm == 0) {
+    outbound_message.rangefinder_got_range = false;
+  }
+  else {
+    outbound_message.rangefinder_got_range = true;
+  }
+}
+
+
 void setup() {
+  Wire.begin();
   // Init Serial Monitor
   Serial.begin(115200);
   pinMode(PIN_LED, OUTPUT);
@@ -92,6 +138,17 @@ void setup() {
   // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(OnDataRecv);
 
+
+  // set up sensors
+  pixy.init();
+  if (!rangefinder.init()) {
+    Serial.println("ERROR: Rangefinder not initialized");
+  }
+  else {
+    rangefinder.startContinuous();
+  }
+
+
   // Solid light indicates success! One small flash indicates successful message send,
   // five small flashes indicate failure to send
   digitalWrite(PIN_LED, HIGH);
@@ -104,8 +161,19 @@ void setup() {
 
 
 void loop() {
-  delay(1000);
+  delay(30); // TODO: make more robust timings
+  loop_pixycam_update();
+  loop_rangefinder_update();
 
+  Serial.println("Got pixy reading: " + String(outbound_message.pixy_saw_train));
+  Serial.println("train x: " + String(outbound_message.pixy_train_x));
+  Serial.println("train y: " + String(outbound_message.pixy_train_y));
+
+  Serial.println("Got range reading: " + String(outbound_message.rangefinder_got_range));
+  Serial.println("distance (mm): " + String(outbound_message.rangefinder_range_mm));
+
+
+  // outbound_message modified in above two functions
   esp_err_t result = esp_now_send(baseESPAddress, (uint8_t *) &outbound_message, sizeof(outbound_message));
 
   if (result == ESP_OK) {
