@@ -1,0 +1,141 @@
+/********************************************
+ *  mae412_group5_pixy.ino
+ *  Description: implements wireless data
+ *  transfer for the pixy-mounted ESP32
+ *
+ *  Authors: Jacob Beyer, Vikash Modi, Jae Yoon
+ *
+ *
+ ********************************************/
+
+#include <arduino.h>
+#include <esp_now.h>
+#include <WiFi.h>
+
+#include <Wire.h>
+#include <I2C_16Bit.h>
+#include <SPI.h>
+#include <Pixy.h>
+#include <VL53L0X.h>
+
+#include "mae412_group5_defines.h"
+
+// defines
+#define PIN_LED 15
+
+// message passing
+String success;
+message_S outbound_message;
+
+// USED FOR DEBUGGING, DON'T REMOVE
+// #define DEBUG_NOW
+
+// configure ESP NOW
+esp_now_peer_info_t peerInfo;
+// callback for data sent
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  #ifdef DEBUG_NOW
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  #endif
+  if (status == 0){
+    success = "Delivery Success :)";
+  }
+  else{
+    success = "Delivery Fail :(";
+  }
+}
+// Callback when data is received (no incoming data)
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  // memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
+  // Serial.print("Bytes received: ");
+  // Serial.println(len);
+  // inboundCounter = incomingReadings.count;
+  // Serial.println("Received: " + String(inboundCounter));
+}
+
+void setup() {
+  // Init Serial Monitor
+  Serial.begin(115200);
+  pinMode(PIN_LED, OUTPUT);
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+  delay(5000);
+
+  // Init ESP-NOW
+  // slow flash is bad
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    while (true) {
+      delay(200);
+      digitalWrite(PIN_LED, LOW);
+      delay(200);
+      digitalWrite(PIN_LED, HIGH);
+    }
+  }
+
+  // Once ESPNow is successfully Init, we will register for Send CB to
+  // get the status of Trasnmitted packet
+  esp_now_register_send_cb(OnDataSent);
+  
+  // Register peer
+  memcpy(peerInfo.peer_addr, baseESPAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  
+  // Add peer        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+  // Register for a callback function that will be called when data is received
+  esp_now_register_recv_cb(OnDataRecv);
+
+  // Solid light indicates success! One small flash indicates successful message send,
+  // five small flashes indicate failure to send
+  digitalWrite(PIN_LED, HIGH);
+  outbound_message.pixy_saw_train = false;
+  outbound_message.pixy_train_x = 0;
+  outbound_message.pixy_train_y = 0;
+  outbound_message.rangefinder_got_range = 0;
+  outbound_message.rangefinder_range_mm = 0;
+}
+
+
+void loop() {
+  delay(1000);
+
+  esp_err_t result = esp_now_send(baseESPAddress, (uint8_t *) &outbound_message, sizeof(outbound_message));
+
+  if (result == ESP_OK) {
+    digitalWrite(PIN_LED, LOW);
+    delay(10);
+    digitalWrite(PIN_LED, HIGH);
+  }
+  else {
+    int del = 50;
+    digitalWrite(PIN_LED, LOW);
+    delay(del);
+    digitalWrite(PIN_LED, HIGH);
+    delay(del);
+    digitalWrite(PIN_LED, LOW);
+    delay(del);
+    digitalWrite(PIN_LED, HIGH);
+    delay(del);
+    digitalWrite(PIN_LED, LOW);
+    delay(del);
+    digitalWrite(PIN_LED, HIGH);
+    delay(del);
+    digitalWrite(PIN_LED, LOW);
+    delay(del);
+    digitalWrite(PIN_LED, HIGH);
+    delay(del);
+    digitalWrite(PIN_LED, LOW);
+    delay(del);
+    digitalWrite(PIN_LED, HIGH);
+    delay(del);
+  }
+}
+
+

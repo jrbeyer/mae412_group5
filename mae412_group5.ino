@@ -96,6 +96,11 @@
 #include <VL53L0X.h>
 #include "BasicStepperDriver.h"
 
+#include <esp_now.h>
+#include <WiFi.h>
+
+#include "mae412_group5_defines.h"
+
 
 /********************************************
   Typedefs
