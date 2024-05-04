@@ -633,12 +633,13 @@ void loop() {
   // put your main code here, to run repeatedly:
 
   // for testing
-  if (counter_240_hz >= 600) {
-    home_steppers();
-    track_yaw.disable();
-    track_pitch.disable();
-    delay(100000);
-  }
+  // if (counter_240_hz >= 600) {
+  //   home_steppers();
+  //   // track_yaw.disable();
+  //   // track_pitch.disable();
+  //   delay(1000);
+  //   counter_240_hz = 0;
+  // }
   // VB_train_available  = digitalRead(PIN_VBTA_in);
   // PC_train_found      = digitalRead(PIN_PTF_in);
   // EXT_kill            = digitalRead(PIN_kill_in);
