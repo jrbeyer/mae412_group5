@@ -190,6 +190,9 @@ bool CTRL_tracking_lock     = false;          // OUTPUT: asserted when tracking 
 bool CTRL_targeting_active  = false;          // OUTPUT: asserted when targeting system (laser) should be activated
 bool CTRL_laser_active      = false;          // !! currently unused OUTPUT: asserted when laser diode should be on
 
+uint16_t PC_train_watchdog  = 0;              // don't want FSM to change immediately in case of momentary glitch, so keep watchdog
+uint16_t PC_train_watchdog_max = 10;          // but after 10 times in a row something's probably wrong, should search again
+
 // PID elements
 PID_params track_pitch_params;
 PID_params track_yaw_params;
@@ -286,11 +289,15 @@ void loop_pixycam_update(){
     const double alpha = 0.9;
     pixy_train_x = (alpha*inbound_message.pixy_train_x) + (1-alpha)*pixy_train_x;
     pixy_train_y = (alpha*inbound_message.pixy_train_y) + (1-alpha)*pixy_train_y;
+    // reset watchdog
+    PC_train_watchdog = 0;
+    PC_train_watchdog = true;
   }
   else { 
     // TODO: make this more robust; slowly move perceived location to center of frame?
     pixy_train_x = (PIXY_MAX_X/2);
     pixy_train_y = (PIXY_MAX_Y/2);
+    PC_train_watchdog++;
   }
 
   // compute location of train in global coordinates
@@ -399,6 +406,13 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
 void loop_position_update(){
   // Serial.println("executed position update, counter: " + String(counter_240_hz));
 
+
+  // check this watchdog first to make sure we have up-to-date control signals
+  if (PC_train_watchdog >= PC_train_watchdog_max) {
+    PC_train_found = false;
+    PC_train_watchdog = PC_train_watchdog_max;
+  }
+
   // update state
   State next_state = STATE_inactive;
   switch (control_state) {
@@ -433,10 +447,13 @@ void loop_position_update(){
       }
       break;
   }
-  // TODO :!!!!!!!!!!!!!!!!! TESTING:
+  // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
   next_state = STATE_lock;
   control_state = next_state;
+
+
   // update outputs from state machine
+  // TODO: deprecated
   switch (control_state) {
     case STATE_inactive:
       CTRL_tracking_search  = false;
@@ -456,13 +473,26 @@ void loop_position_update(){
   }
 
   // execute control calculations
+  switch (control_state) {
+    case STATE_inactive:
+      if (track_yaw_params.count_est != 0)    unwind_stepper(&track_yaw_params, &track_yaw);
+      if (track_pitch_params.count_est != 0)  unwind_stepper(&track_pitch_params, &track_pitch);
+      // if (target_yaw_params.count_est != 0)   unwind_stepper(&target_yaw_params, &target_yaw);
+      // if (target_pitch_params.count_est != 0) unwind_stepper(&target_pitch_params, &target_pitch);
+      break;
+    case STATE_search:
+      // TODO: implement search algorithm
+      break;
+    case STATE_lock: 
+      track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
+      track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
+      execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
+      execute_PID(&track_pitch_params, &track_pitch, 1);
+      //TODO: move laser pointer too
+      break;
+  }
 
-  // pixycam control update
-  // TODO: gate these based on CTRL_tracking_search/lock
-  track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
-  track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-  execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
-  execute_PID(&track_pitch_params, &track_pitch, 1);
+
 
   // laser pointer control update
 }
