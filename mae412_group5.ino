@@ -317,12 +317,33 @@ void reset_PID(PID_params* params) {
 }
 
 // unwind if we hit -720 or 720 degrees
-void unwind(PID_params* params, BasicStepperDriver* driver) {
+void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
   Serial.println("Unwinding!");
   noInterrupts();
-    driver->move(-params->count_est);
-    params->count_est = 0;
+  long step_size = (params->count_est < 0) ? 15 : -15; // step slowly back to home
+
+
+  while (abs(params->count_est) >= abs(step_size)) {
+    driver->move(step_size);
+    params->count_est += step_size;
+    delay(30); // drop this down with testing
+  }
+  
+  // step the rest of the way
+  driver->move(-params->count_est);
+  params->count_est = 0;
+
   interrupts();
+}
+
+// bring all steppers back to home
+void home_steppers() {
+  unwind_stepper(&track_pitch_params, &track_pitch);
+  delay(100);
+  unwind_stepper(&track_yaw_params, &track_yaw);
+  delay(100);
+  // unwind_stepper(&target_pitch_params, &target_pitch);
+  // unwind_stepper(&target_yaw_params, &target_yaw);
 }
 
 // generic PID execution functions (can execute once for each stepper motor)
@@ -439,8 +460,8 @@ void loop_position_update(){
   // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
   track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-  execute_PID(&track_yaw_params, &track_yaw, 1);
-  execute_PID(&track_pitch_params, &track_pitch, counter_240_hz);
+  execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
+  execute_PID(&track_pitch_params, &track_pitch, 1);
 
   // laser pointer control update
 }
@@ -612,6 +633,12 @@ void loop() {
   // put your main code here, to run repeatedly:
 
   // for testing
+  if (counter_240_hz >= 600) {
+    home_steppers();
+    track_yaw.disable();
+    track_pitch.disable();
+    delay(100000);
+  }
   // VB_train_available  = digitalRead(PIN_VBTA_in);
   // PC_train_found      = digitalRead(PIN_PTF_in);
   // EXT_kill            = digitalRead(PIN_kill_in);
