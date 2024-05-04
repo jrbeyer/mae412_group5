@@ -14,7 +14,7 @@
  // 27              A4 (ESP 8)              SDA (i2c) Vector board 13, purple
  // 28              A5 (ESP 9)              SCL (i2c) Vector board 14, dark blue
  // 16              10                      Serial Rx (ACIA)
- // 17              11                      Serial Tx (ACIA) TODO: PULLUP RESISTOR!!!!!!!!
+ // 17              11                      Serial Tx (ACIA)
 
  // 6x pins
 

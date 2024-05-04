@@ -80,7 +80,7 @@
 *********************************************/
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 200
-#define RPM 100 //TODO: is this what value we want?
+#define RPM 100 
 // Since microstepping is set externally, make sure this matches the selected mode
 // If it doesn't, the motor will move at a different RPM than chosen
 // 1=full step, 2=half step etc.
@@ -375,7 +375,10 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   if (params->count_est + command_l > params->count_clip || params->count_est + command_l < -params->count_clip) {
     Serial.println("Hit count limit: " + String(params->count_est));
     command_l = 0;
-    // TODO: unwinding procedure
+    // TODO: unwinding procedure untested in this context
+    if (params == &track_yaw_params) {
+      unwind_stepper(params, driver);
+    }
   }
 
   // issue command
@@ -455,9 +458,7 @@ void loop_position_update(){
   // execute control calculations
 
   // pixycam control update
-  // TODO: may need to invert due to upside-down mounting
   // TODO: gate these based on CTRL_tracking_search/lock
-  // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
   track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
   execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
