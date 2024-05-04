@@ -16,6 +16,8 @@
  // 16              10                      Serial Rx (ACIA)
  // 17              11                      Serial Tx (ACIA) TODO: PULLUP RESISTOR!!!!!!!!
 
+ // 6x pins
+
 
 #include <Wire.h>
 #include <SoftwareSerial.h>
@@ -43,6 +45,9 @@ void ACIA_handler() {
     VB_train_available = (bool)(RxByte & BIT_VBTA);
   }
 }
+
+// TODO: throw switches
+void throw_switches();
 
 void setup() {
   pinMode(PIN_Rx, INPUT);

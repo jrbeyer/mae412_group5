@@ -124,6 +124,7 @@ typedef struct PID_params {
   double integrator_sat;
   double prior_error;
   double clip;
+  long   count_est;       // estimate of how many counts the stepper has travelled
 };
 
 /********************************************
@@ -328,7 +329,9 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
     command = -params->clip;
   }
   // issue command
-  driver->move((long)command);
+  long command_l = (long)command;
+  driver->move(command_l);
+  params->count_est += command_l;
   
   if (i%10 == 0) {
     Serial.println("Executed PID loop, new params: ");
@@ -336,6 +339,7 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
     Serial.println("\tLast Error: " + String(params->prior_error));
     Serial.println("\tIntegrator: " + String(params->integrator));
     Serial.println("\tCommand:    " + String(command));
+    Serial.println("\tEstimate:   " + String(params->count_est));
   }
 }
 
@@ -507,7 +511,8 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP
+    .clip = CLIP,
+    .count_est = 0,
   };
   track_yaw_params = {
     .curr_target = 0.0,
@@ -518,7 +523,8 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP
+    .clip = CLIP,
+    .count_est = 0,
   };
   target_pitch_params = {
     .curr_target = 0.0,
@@ -529,7 +535,8 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP
+    .clip = CLIP,
+    .count_est = 0,
   };
   target_yaw_params = {
     .curr_target = 0.0,
@@ -540,7 +547,8 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP
+    .clip = CLIP,
+    .count_est = 0,
   };
   
 
@@ -593,7 +601,7 @@ void loop() {
         // loop_rangefinder_update();
         break;
       case 3:
-        request_arduino_comms();
+        // request_arduino_comms();
         break;
     }
     // always execute position loops
