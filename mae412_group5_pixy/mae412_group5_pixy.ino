@@ -161,7 +161,7 @@ void setup() {
 
 
 void loop() {
-  delay(30); // TODO: make more robust timings
+  delay(20); // TODO: make more robust timings
   loop_pixycam_update();
   loop_rangefinder_update();
 

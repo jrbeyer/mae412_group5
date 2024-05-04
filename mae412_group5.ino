@@ -136,6 +136,7 @@ typedef struct PID_params {
 // message passing
 String success;
 message_S inbound_message;
+uint16_t wifi_watchdog;
 
 // configure ESP NOW
 esp_now_peer_info_t peerInfo;
@@ -154,6 +155,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 // Callback when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&inbound_message, incomingData, sizeof(inbound_message));
+  wifi_watchdog = 0;
   // Serial.print("Bytes received: ");
   // Serial.println(len);
   // if (inbound_message.pixy_saw_train) {
@@ -199,8 +201,8 @@ VL53L0X  rangefinder;
 uint16_t distance_sensor_raw  = 0;    // ADC ticks, 0-1023
 double   distance_train       = 0.0;  // cm, 10-150
 Pixy pixy;
-uint16_t pixy_train_x         = 0;    // pixels, 0-319
-uint16_t pixy_train_y         = 0;    // pixels, 0-199
+double pixy_train_x         = 0;    // pixels, 0-319
+double pixy_train_y         = 0;    // pixels, 0-199
 
 // stepper motor controllers
 BasicStepperDriver track_yaw(MOTOR_STEPS, P_track_yaw_dir, P_track_yaw_step, P_motor_enable);
@@ -221,7 +223,8 @@ double train_y = 0.0;
 
 // highest-frequency clock
 // #define TIMER_FREQ_HZ 240.0
-#define TIMER_FREQ_HZ 120.0       // low-frequency for testing
+#define TIMER_FREQ_HZ 80.0
+// #define TIMER_FREQ_HZ 120.0
 // hanldes the 240 Hz timer
 bool HighFrequencyTimerHandler(void* timerNo)
 {
@@ -279,8 +282,15 @@ void loop_pixycam_update(){
 
 
   if (inbound_message.pixy_saw_train) {
-    pixy_train_x = inbound_message.pixy_train_x;
-    pixy_train_y = inbound_message.pixy_train_y;
+    // smooth update
+    const double alpha = 0.9;
+    pixy_train_x = (alpha*inbound_message.pixy_train_x) + (1-alpha)*pixy_train_x;
+    pixy_train_y = (alpha*inbound_message.pixy_train_y) + (1-alpha)*pixy_train_y;
+  }
+  else { 
+    // TODO: make this more robust; slowly move perceived location to center of frame?
+    pixy_train_x = (PIXY_MAX_X/2);
+    pixy_train_y = (PIXY_MAX_Y/2);
   }
 
   // compute location of train in global coordinates
@@ -481,6 +491,7 @@ void setup() {
 
   // blue light on when done with ESP NOW config
   digitalWrite(PIN_LED, HIGH);
+  wifi_watchdog = 0;
 
 
 
@@ -629,8 +640,22 @@ void loop() {
         // request_arduino_comms();
         break;
     }
-    // always execute position loops
-    loop_position_update();
+
+    // enforce ESP-NOW watchdog
+    #define WIFI_WATCHDOG_MAX 20
+    wifi_watchdog++;
+    if (wifi_watchdog > WIFI_WATCHDOG_MAX) {
+      Serial.println("Lost ESP-NOW connection!");
+      reset_PID(&track_pitch_params);
+      reset_PID(&track_yaw_params);
+      // reset_PID(&target_pitch_params);
+      // reset_PID(&target_yaw_params);
+      wifi_watchdog--; // don't let it overflow
+    }
+    else {
+      // always execute position loops
+      loop_position_update();
+    }
     // Serial.println("========\nNEW STATE: " + String(control_state) + "\n========\n");
   }
 }
