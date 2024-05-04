@@ -28,8 +28,8 @@
  // 17              11                      MOSI (ICSP yellow)
  // 18              12                      MISO (ICSP orange)
  // 19              13                      SCK (ICSP brown)
- // 27              A4                      SDA (i2c to ADC)
- // 28              A5                      SCL (i2c)
+ // 27              A4 (ESP 8)              SDA (i2c)
+ // 28              A5 (ESP 9)              SCL (i2c)
  // NOTE: no pin defines needed for this block (taken care of by libraries)
 
  // 1               ~                       RTS (for FTDI comms cable)
@@ -40,7 +40,7 @@
 
  //                 10                      stepper enable
  //                 6,7                     track yaw dir,step
- //                 8,9                     track pitch dir,step
+ //                 39,40                   track pitch dir,step
  //                 4,5                     target yaw dir,step
  //                 2,3                     target pitch dir,step
  //                 A0/14 (same pin)        laser diode on/off
@@ -48,8 +48,8 @@
  #define P_motor_enable 10
  #define P_track_yaw_dir  6 
  #define P_track_yaw_step 7 
- #define P_track_pitch_dir  8// TODO: change pin to avoid I2C conflict
- #define P_track_pitch_step 9// TODO: change pin to avoid I2C conflict
+ #define P_track_pitch_dir  39
+ #define P_track_pitch_step 40
 
  #define P_target_yaw_dir   4
  #define P_target_yaw_step  5
@@ -255,6 +255,18 @@ void init_ADC() {
 }
 
 
+// request information from the VB arduino
+#define BIT_VBTA (0x01) // bit 1: vector board says train available
+void request_arduino_comms() {
+  byte RxByte;
+  Wire.requestFrom(0x87, 1); // Request from arduino @ 0x87, Data Length = 1Byte
+  while(Wire.available()) {  // Read receive from arduino
+    RxByte = Wire.read();
+  }
+  VB_train_available = (bool)(RxByte & BIT_VBTA);
+}
+
+
 /********************************************
   Helper Functions
 *********************************************/
@@ -440,7 +452,7 @@ void setup() {
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
     Serial.println("Failed to add peer");
-    return;
+    // return;
   }
   // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(OnDataRecv);
@@ -541,7 +553,8 @@ void setup() {
   // utest_loop_position_update();
   // utest_execute_PID();
   // utest_stepper_motor();
-  utest_receive_esp_now();
+  // utest_receive_esp_now();
+  // utest_request_arduino_comms();
 
 
   track_yaw.disable();
@@ -580,6 +593,7 @@ void loop() {
         // loop_rangefinder_update();
         break;
       case 3:
+        request_arduino_comms();
         break;
     }
     // always execute position loops

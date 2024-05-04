@@ -1,5 +1,6 @@
 /********************************************
   UNIT TESTING
+  Very bad design, requires access to variables in mae412_group5.ino
 *********************************************/
 
 #ifndef MAE412_UTESTS_H
@@ -213,6 +214,21 @@ void utest_receive_esp_now() {
     }
   }
 }
+
+// in test mode, VB arduino will alternate between sending 0 and 1
+void utest_request_arduino_comms() {
+  Serial.println("Beginning request_arduino_comms test...");
+  delay(500);
+  int i;
+  int max = 50;
+  for (i = 0; i < max; i++) {
+    request_arduino_comms();
+    String avail = (VB_train_available) ? "true" : "false";
+    Serial.println("VB_train_available: " + avail);
+    delay(800);
+  }
+}
+
 
 void utest_loop_position_update() {
   Serial.println("Beginning loop_position_update test...");
