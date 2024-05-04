@@ -123,8 +123,9 @@ typedef struct PID_params {
   double integrator;      // integrates error over time
   double integrator_sat;
   double prior_error;
-  double clip;
+  double command_clip;
   long   count_est;       // estimate of how many counts the stepper has travelled
+  long   count_clip;      // clip (keep pitch within [-36, 36]deg, keep yaw within [-720, 720]deg) (but in encoder counts)
 };
 
 /********************************************
@@ -305,6 +306,15 @@ void reset_PID(PID_params* params) {
   params->prior_error = 0.0;
 }
 
+// unwind if we hit -720 or 720 degrees
+void unwind(PID_params* params, BasicStepperDriver* driver) {
+  Serial.println("Unwinding!");
+  noInterrupts();
+    driver->move(-params->count_est);
+    params->count_est = 0;
+  interrupts();
+}
+
 // generic PID execution functions (can execute once for each stepper motor)
 #define CONTROL_PERIOD (1.0 / TIMER_FREQ_HZ)
 void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
@@ -322,14 +332,22 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
                   + (params->ki * params->integrator * CONTROL_PERIOD);
   // update priors and clip command
   params->prior_error = params->curr_error;
-  if (command >= params->clip) {
-    command = params->clip;
+  if (command >= params->command_clip) {
+    command = params->command_clip;
   }
-  else if (command <= -params->clip) {
-    command = -params->clip;
+  else if (command <= -params->command_clip) {
+    command = -params->command_clip;
   }
-  // issue command
+
+  // bounds clipping
   long command_l = (long)command;
+  if (params->count_est + command_l > params->count_clip || params->count_est + command_l < -params->count_clip) {
+    Serial.println("Hit count limit: " + String(params->count_est));
+    command_l = 0;
+    // TODO: unwinding procedure
+  }
+
+  // issue command
   driver->move(command_l);
   params->count_est += command_l;
   
@@ -338,7 +356,7 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
     Serial.println("\tError:      " + String(params->curr_error));
     Serial.println("\tLast Error: " + String(params->prior_error));
     Serial.println("\tIntegrator: " + String(params->integrator));
-    Serial.println("\tCommand:    " + String(command));
+    Serial.println("\tCommand:    " + String(command_l));
     Serial.println("\tEstimate:   " + String(params->count_est));
   }
 }
@@ -411,8 +429,8 @@ void loop_position_update(){
   // TODO: these aren't right, need to update when we have encoder readings
   track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
   track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-  execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
-  execute_PID(&track_pitch_params, &track_pitch, 1);
+  execute_PID(&track_yaw_params, &track_yaw, 1);
+  execute_PID(&track_pitch_params, &track_pitch, counter_240_hz);
 
   // laser pointer control update
 }
@@ -501,18 +519,22 @@ void setup() {
   #define KI 0.5
   #define KD 0.001
   #define INTEGRATOR_SAT 100.0
-  #define CLIP 40.0
+  #define COMMAND_CLIP 40.0
+  #define PITCH_COUNT_CLIP 64
+  #define YAW_COUNT_CLIP 1600
+  #define SCALE (80.0/80.0)
   track_pitch_params = {
     .curr_target = 0.0,
     .curr_error = 0.0,
-    .kp = KP,
-    .ki = KI,
-    .kd = KD,
+    .kp = KP*SCALE,
+    .ki = KI*SCALE,
+    .kd = KD*SCALE,
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP,
+    .command_clip = COMMAND_CLIP,
     .count_est = 0,
+    .count_clip = PITCH_COUNT_CLIP,
   };
   track_yaw_params = {
     .curr_target = 0.0,
@@ -523,8 +545,9 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP,
+    .command_clip = COMMAND_CLIP,
     .count_est = 0,
+    .count_clip = YAW_COUNT_CLIP,
   };
   target_pitch_params = {
     .curr_target = 0.0,
@@ -535,8 +558,9 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP,
+    .command_clip = COMMAND_CLIP,
     .count_est = 0,
+    .count_clip = PITCH_COUNT_CLIP,
   };
   target_yaw_params = {
     .curr_target = 0.0,
@@ -547,8 +571,9 @@ void setup() {
     .integrator = 0.0,
     .integrator_sat = INTEGRATOR_SAT,
     .prior_error = 0.0,
-    .clip = CLIP,
+    .command_clip = COMMAND_CLIP,
     .count_est = 0,
+    .count_clip = YAW_COUNT_CLIP,
   };
   
 
