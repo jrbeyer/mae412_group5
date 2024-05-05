@@ -214,6 +214,7 @@ BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_ste
 // BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
 
 bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
+bool sweep_ccw = false;   // keep track of which direction we are sweeping in if true then ccw if false then cw
 
 // stepper motor feedback (TODO)
 
@@ -341,6 +342,31 @@ void enable_disable_steppers(bool enable) {
     // target_pitch.disable();
     steppers_enabled = false;
   }
+}
+// Have the steppers search for the target by sweeping the straight lines of track from entry to exit
+void search() {
+  if (track_pitch_params.count_est != 0) {
+    unwind_stepper(&track_pitch_params, &track_pitch);
+  }
+  sweep_steppers(&track_yaw_params, &track_yaw);
+}
+
+
+//sweep steppers to find target panning right and left in certain range, 
+// until pixie cam sees the target
+void sweep_steppers(PID_params* params, BasicStepperDriver* driver) {
+
+  const long cw_sweep_limit = 200; // will be 7 steps to the right of home (105 counts)
+  const long ccw_sweep_limit = -200; // will be 7 steps to the left of home (105 counts)
+  
+  long step_size = (sweep_ccw ? -15 : 15); // sweep in steps of 15 or more neg if ccw pos if cw
+
+  if ((sweep_ccw && params->count_est < ccw_sweep_limit) || (!sweep_ccw && params->count_est > cw_sweep_limit)) {
+    sweep_ccw = !sweep_ccw;
+    step_size = -step_size; // reverse direction
+  }
+  driver->move(step_size);
+  params->count_est += step_size;
 }
 
 // unwind if we hit -720 or 720 degrees
@@ -509,11 +535,10 @@ void loop_position_update(){
       }
       break;
     case STATE_search:
-      // TODO: implement search algorithm, remove stepper disabling
-      if (steppers_enabled) {
-        home_steppers();
-        enable_disable_steppers(false);
+      if (!steppers_enabled) {
+        enable_disable_steppers(true);
       }
+      search();
       break;
     case STATE_lock: 
       if (!steppers_enabled) {
@@ -606,11 +631,10 @@ void setup() {
   track_yaw.disable();
   track_pitch.disable();
   Serial.begin(115200);
-  while (!Serial.available()){}
+  // while (!Serial.available()){}
   Serial.read(); // flush
   Serial.flush();
 
-  // enable_disable_steppers(true);  // true indicates to enable
 
 
   #define KP 0.025
@@ -621,6 +645,8 @@ void setup() {
   #define PITCH_COUNT_CLIP 64
   #define YAW_COUNT_CLIP 1600
   #define SCALE (80.0/80.0)
+
+  // TODO Why are pitch and yaw params defined twice?
   track_pitch_params = {
     .curr_target = 0.0,
     .curr_error = 0.0,
@@ -743,6 +769,7 @@ void loop() {
     wifi_watchdog++;
     if (wifi_watchdog > WIFI_WATCHDOG_MAX) {
       // Serial.println("Lost ESP-NOW connection!");
+      // reset all control signals so we don't do anything stupid
       reset_PID(&track_pitch_params);
       reset_PID(&track_yaw_params);
       // reset_PID(&target_pitch_params);
