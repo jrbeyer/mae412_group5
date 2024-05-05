@@ -108,4 +108,14 @@ void loop() {
   if (aciaSerial.available()) {
     ACIA_handler();
   }
+
+  if (digitalRead(PIN_HE_B) == HIGH) {
+        hall_b_handler();
+  }
+
+  // Check if Hall Effect sensor C detected a magnetic field
+  if (digitalRead(PIN_HE_C) == HIGH) {
+        hall_c_handler();
+  }
+
 }
