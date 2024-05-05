@@ -61,8 +61,8 @@
 
 // TODO: how to set in order to actually throw in the right direction?
 typedef enum switch_direction {
-  DIR_straight_turnout = LOW,
-  DIR_turnout_straight = HIGH,
+  DIR_straight_turnout = HIGH,
+  DIR_turnout_straight = LOW,
 };
 
 // FSM states
