@@ -213,6 +213,7 @@ BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_ste
 // BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
 // BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
 
+bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
 
 // stepper motor feedback (TODO)
 
@@ -291,7 +292,7 @@ void loop_pixycam_update(){
     pixy_train_y = (alpha*inbound_message.pixy_train_y) + (1-alpha)*pixy_train_y;
     // reset watchdog
     PC_train_watchdog = 0;
-    PC_train_watchdog = true;
+    PC_train_found = true;
   }
   else { 
     // TODO: make this more robust; slowly move perceived location to center of frame?
@@ -323,9 +324,28 @@ void reset_PID(PID_params* params) {
   params->prior_error = 0.0;
 }
 
+
+// enable or disable all steppers
+void enable_disable_steppers(bool enable) {
+  if (enable) {
+    track_yaw.enable();
+    track_pitch.enable();
+    // target_yaw.enable();
+    // target_pitch.enable();
+    steppers_enabled = true;
+  }
+  else {
+    track_yaw.disable();
+    track_pitch.disable();
+    // target_yaw.disable();
+    // target_pitch.disable();
+    steppers_enabled = false;
+  }
+}
+
 // unwind if we hit -720 or 720 degrees
 void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
-  Serial.println("Unwinding!");
+  // Serial.println("Unwinding!");
   noInterrupts();
   long step_size = (params->count_est < 0) ? 15 : -15; // step slowly back to home
 
@@ -346,9 +366,9 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
 // bring all steppers back to home
 void home_steppers() {
   unwind_stepper(&track_pitch_params, &track_pitch);
-  delay(100);
+  delay(10);
   unwind_stepper(&track_yaw_params, &track_yaw);
-  delay(100);
+  delay(10);
   // unwind_stepper(&target_pitch_params, &target_pitch);
   // unwind_stepper(&target_yaw_params, &target_yaw);
 }
@@ -412,6 +432,16 @@ void loop_position_update(){
     PC_train_found = false;
     PC_train_watchdog = PC_train_watchdog_max;
   }
+  
+  
+  
+  
+  // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
+  VB_train_available = true;
+  EXT_kill = false;
+
+
+
 
   // update state
   State next_state = STATE_inactive;
@@ -447,8 +477,7 @@ void loop_position_update(){
       }
       break;
   }
-  // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
-  next_state = STATE_lock;
+  
   control_state = next_state;
 
 
@@ -475,18 +504,25 @@ void loop_position_update(){
   // execute control calculations
   switch (control_state) {
     case STATE_inactive:
-      if (track_yaw_params.count_est != 0)    unwind_stepper(&track_yaw_params, &track_yaw);
-      if (track_pitch_params.count_est != 0)  unwind_stepper(&track_pitch_params, &track_pitch);
-      // if (target_yaw_params.count_est != 0)   unwind_stepper(&target_yaw_params, &target_yaw);
-      // if (target_pitch_params.count_est != 0) unwind_stepper(&target_pitch_params, &target_pitch);
+      if (steppers_enabled) {
+        home_steppers();
+        enable_disable_steppers(false);
+      }
       break;
     case STATE_search:
-      // TODO: implement search algorithm
+      // TODO: implement search algorithm, remove stepper disabling
+      if (steppers_enabled) {
+        home_steppers();
+        enable_disable_steppers(false);
+      }
       break;
     case STATE_lock: 
+      if (!steppers_enabled) {
+        enable_disable_steppers(true);
+      }
       track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
       track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
-      execute_PID(&track_yaw_params, &track_yaw, counter_240_hz);
+      execute_PID(&track_yaw_params, &track_yaw, 1);
       execute_PID(&track_pitch_params, &track_pitch, 1);
       //TODO: move laser pointer too
       break;
@@ -573,10 +609,8 @@ void setup() {
   Serial.read(); // flush
   Serial.flush();
 
-  track_yaw.enable();
-  track_pitch.enable();
-  // target_yaw.enable();
-  // target_pitch.enable();
+  enable_disable_steppers(true);  // true indicates to enable
+
 
   #define KP 0.025
   #define KI 0.5
@@ -715,7 +749,14 @@ void loop() {
       // always execute position loops
       loop_position_update();
     }
-    // Serial.println("========\nNEW STATE: " + String(control_state) + "\n========\n");
+
+    if (counter_240_hz % 10 == 0) {
+      String state_string = (control_state == STATE_inactive) ? "inactive" :
+                            (control_state == STATE_search)   ? "search"   :
+                            (control_state == STATE_lock)     ? "lock"     : "bad state";
+      Serial.println("========\nSTATE: " + state_string + "\n========");
+
+    }
   }
 }
 
