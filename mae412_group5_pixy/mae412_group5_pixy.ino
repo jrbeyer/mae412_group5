@@ -99,6 +99,16 @@ void loop_rangefinder_update(){
 }
 
 
+// Function to flash the LED a specified number of times
+void flashLED(int flashes, int delayTime) {
+  for (int i = 0; i < flashes; i++) {
+    digitalWrite(PIN_LED, LOW);
+    delay(delayTime);
+    digitalWrite(PIN_LED, HIGH);
+    delay(delayTime);
+  }
+}
+
 void setup() {
   Wire.begin();
   // Init Serial Monitor
@@ -176,34 +186,13 @@ void loop() {
   // outbound_message modified in above two functions
   esp_err_t result = esp_now_send(baseESPAddress, (uint8_t *) &outbound_message, sizeof(outbound_message));
 
+   // Flash the LED based on the result of the message send
   if (result == ESP_OK) {
-    digitalWrite(PIN_LED, LOW);
-    delay(10);
-    digitalWrite(PIN_LED, HIGH);
+    flashLED(1, 10); // Flash once for success
+  } else {
+    flashLED(5, 50); // Flash five times for failure
   }
-  else {
-    int del = 50;
-    digitalWrite(PIN_LED, LOW);
-    delay(del);
-    digitalWrite(PIN_LED, HIGH);
-    delay(del);
-    digitalWrite(PIN_LED, LOW);
-    delay(del);
-    digitalWrite(PIN_LED, HIGH);
-    delay(del);
-    digitalWrite(PIN_LED, LOW);
-    delay(del);
-    digitalWrite(PIN_LED, HIGH);
-    delay(del);
-    digitalWrite(PIN_LED, LOW);
-    delay(del);
-    digitalWrite(PIN_LED, HIGH);
-    delay(del);
-    digitalWrite(PIN_LED, LOW);
-    delay(del);
-    digitalWrite(PIN_LED, HIGH);
-    delay(del);
-  }
+}
 }
 
 
