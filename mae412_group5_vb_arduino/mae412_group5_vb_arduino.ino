@@ -24,11 +24,6 @@
  // 4               2                       Hall Effect B Input
  // 5               3                       Hall Effect C Input
 
-
-
-#include <Wire.h>
-#include <SoftwareSerial.h>
-
 #define PIN_Rx          10
 #define PIN_Tx          11
 #define PIN_DIR_A       5
@@ -37,7 +32,28 @@
 #define PIN_HE_B        2
 #define PIN_HE_C        3
 
+/********************************************
+ Timer Things (mostly from docs)
+*********************************************/
+// DO NOT TOUCH
+// These define's must be placed at the beginning before #include "TimerInterrupt.h" 
+// _TIMERINTERRUPT_LOGLEVEL_ from 0 to 4 
+// Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system. 
+#define TIMER_INTERRUPT_DEBUG         0 
+#define _TIMERINTERRUPT_LOGLEVEL_     0 
+#define USE_TIMER_1     true 
+// To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
+#include "TimerInterrupt.h" 
+// To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error 
+#include "ISR_Timer.h" 
 
+// Select the timers you're using, here ITimer1
+#define USE_TIMER_1     true
+// end DO NOT TOUCH
+
+
+#include <Wire.h>
+#include <SoftwareSerial.h>
 
 // straight_turnout = top switch straight, bottom switch turnout
 // turnout_straight = top switch turnout, bottom switch straight
@@ -45,15 +61,85 @@
 
 // TODO: how to set in order to actually throw in the right direction?
 typedef enum switch_direction {
-  DIR_straight_turnout = 0,
-  DIR_turnout_straight = 1,
+  DIR_straight_turnout = LOW,
+  DIR_turnout_straight = HIGH,
 };
 
+// FSM states
+typedef enum State_VB {
+  STATE_nominal,
+  STATE_delay,
+  STATE_throw_to_inverse,
+  STATE_inverse,
+  STATE_throw_to_nominal,
+  num_state,
+};
+
+
+
+
+
+/********************************************
+  Global Variables
+*********************************************/
+
+// Switch directions
 switch_direction a_direction = DIR_straight_turnout;
 switch_direction b_direction = DIR_turnout_straight;
 
+// Hall effect flags
+bool hall_b_tripped = false;
+bool hall_c_tripped = false;
+
+// Comms to ESP
 SoftwareSerial aciaSerial(PIN_Rx, PIN_Tx); // RX, TX
 bool VB_train_available;
+
+// Mealy machine: throw switches on transitions between states
+State_VB last_state = STATE_nominal;
+State_VB curr_state = STATE_nominal;
+State_VB next_state = STATE_nominal;
+
+// counters
+volatile uint16_t counter_100_hz = 0;             // counts 10Hz timer increments
+volatile bool counter_new_val_available = false;  // asserted in timer ISR to tell loop that new counter is ready
+
+uint16_t delay_counter = 0;       // hardcoded delay between hall B trigger and switch to inverse
+uint16_t delay_counter_max = 500; // hundredths of a second
+
+uint16_t throw_delay_counter = 0;     // short delay to power relay coils long enough to throw switch
+uint16_t throw_delay_counter_max = 25; // hundredths of a second, x10 = milliseconds TODO: tune value to make sure switches throw
+
+
+/********************************************
+  Interrupt Handlers
+*********************************************/
+
+// highest-frequency clock
+#define TIMER_FREQ_HZ 100.0
+void HighFrequencyTimerHandler()
+{
+  // Doing something here inside ISR
+  counter_new_val_available = true;
+  counter_100_hz++;
+
+  // hardcoded delay between hall B trigger and switch to inverse
+  if (curr_state == STATE_delay) {
+    delay_counter++;
+  }
+  else {
+    delay_counter = 0;
+  }
+
+  // short delay to power relay coils long enough to throw switch
+  if (curr_state == STATE_throw_to_inverse || curr_state == STATE_throw_to_nominal) {
+    throw_delay_counter++;
+  }
+  else {
+    throw_delay_counter = 0;
+  }
+}
+
 
 void I2C_handler() {
   byte TxByte = 0;
@@ -73,18 +159,118 @@ void ACIA_handler() {
   }
 }
 
-void hall_b_handler() {
 
+// todo: deprecated?
+void hall_b_handler() {
+  hall_b_tripped = true;
 }
 
 void hall_c_handler() {
+  hall_c_tripped = true;
   VB_train_available = false;
 }
 
+
+/********************************************
+  Helper Functions
+*********************************************/
 // TODO: throw switches
-void throw_switches() {
+void start_throw_switches() {
+  digitalWrite(PIN_DIR_A, a_direction);
+  digitalWrite(PIN_DIR_B, b_direction);
+
+  // relays active low
+  digitalWrite(PIN_SWITCH_TRIG, LOW);
+  
+  // testing only
+  // Serial.println("Starting to throw...");
+  // Serial.println("A switches: " + String(a_direction));
+  // Serial.println("B switches: " + String(b_direction));
+}
+void stop_throw_switches() {
+  // relays active low
+  digitalWrite(PIN_SWITCH_TRIG, HIGH);
+  // Serial.println("Stopping throw!");
+}
+
+// compute state machine
+void update_state() {
+  // default condition: keep current state so we don't throw switches by accident
+  next_state = curr_state;
+
+  // compute next state
+  switch (curr_state) {
+    case STATE_nominal:
+      if (hall_b_tripped) {
+        next_state = STATE_delay;
+      }
+      break;
+    case STATE_delay:
+      if (delay_counter >= delay_counter_max) {
+        next_state = STATE_throw_to_inverse;
+      }
+      break;
+    case STATE_throw_to_inverse:
+      if (throw_delay_counter >= throw_delay_counter_max) {
+        next_state = STATE_inverse;
+      }
+      break;
+    case STATE_inverse:
+      if (hall_c_tripped) {
+        next_state = STATE_throw_to_nominal;
+      }
+      break;
+    case STATE_throw_to_nominal:
+      if (throw_delay_counter >= throw_delay_counter_max) {
+        next_state = STATE_nominal;
+      }
+      break;
+  }
+
+  last_state = curr_state;
+  curr_state = next_state;
+
+  // TODO: testing only
+  // if (curr_state - last_state != 0) {
+  //   // testing only
+  //   String state_string = curr_state == STATE_nominal ? "nominal" :
+  //                         curr_state == STATE_delay ? "delay" :
+  //                         curr_state == STATE_throw_to_inverse ? "throw to inverse" :
+  //                         curr_state == STATE_inverse ? "inverse" :
+  //                         curr_state == STATE_throw_to_nominal ? "throw to nominal" : "bad state";
+  //   Serial.println("==================\n NEW STATE: \n\t" + state_string + "\n==================\n");
+  // }
+
+  // output logic, output on transition (Mealy)
+  
+  // always keep track of which direction to throw switches
+  switch (curr_state) {
+    case STATE_nominal:
+    case STATE_throw_to_nominal:
+      a_direction = DIR_straight_turnout;
+      b_direction = DIR_turnout_straight;
+      break;
+    case STATE_inverse:
+    case STATE_throw_to_inverse:
+    case STATE_delay:
+      a_direction = DIR_turnout_straight;
+      b_direction = DIR_straight_turnout;
+      break;
+  }
+
+  // start throwing switches on transition to throw states
+  if ( (curr_state == STATE_throw_to_inverse && last_state == STATE_delay) 
+    || (curr_state == STATE_throw_to_nominal && last_state == STATE_inverse)) {
+    start_throw_switches();
+  }
+  // stop throwing switches on transition away from throw states
+  if ( (last_state == STATE_throw_to_inverse && curr_state == STATE_inverse)
+    || (last_state == STATE_throw_to_nominal && curr_state == STATE_nominal)) {
+    stop_throw_switches();
+  }
 
 }
+
 
 void setup() {
   pinMode(PIN_Rx, INPUT);
@@ -97,14 +283,41 @@ void setup() {
   pinMode(PIN_HE_B, INPUT);
   pinMode(PIN_HE_C, INPUT);
 
-  // Serial.begin(115200);
+
+  Serial.begin(115200); // TESTING ONLY
   aciaSerial.begin(9600);
   Wire.begin(0x87);
   Wire.onRequest(I2C_handler);
+
+  ITimer1.init();
+  // Frequency in float Hz
+  if (!ITimer1.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler)) {
+  //  won't start if timer fails to init
+    while (true) {
+      start_throw_switches();
+      delay(50);
+      stop_throw_switches();
+      delay(1000);
+    }
+  }
+  // else
+  //   Serial.println("Can't set ITimer. Select another freq. or timer");
+
   VB_train_available = false;
 }
 
 void loop() {
+  // constantly read hall effects
+  // TODO: should be a majority of several readings to avoid bounce/glitches
+  hall_b_tripped = !digitalRead(PIN_HE_B); // active low
+  hall_c_tripped = !digitalRead(PIN_HE_C);
+
+  // handle base counter
+  if (counter_new_val_available) {
+    counter_new_val_available = false;  // clear flag!!!!
+    update_state(); // also throws switches as needed
+  }
+
   if (aciaSerial.available()) {
     ACIA_handler();
   }
