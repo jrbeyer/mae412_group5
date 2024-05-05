@@ -90,6 +90,9 @@ switch_direction b_direction = DIR_turnout_straight;
 // Hall effect flags
 bool hall_b_tripped = false;
 bool hall_c_tripped = false;
+int16_t hall_b_debounce_count = 0;
+int16_t hall_c_debounce_count = 0;
+const uint16_t hall_debounce_saturate = 8;
 
 // Comms to ESP
 SoftwareSerial aciaSerial(PIN_Rx, PIN_Tx); // RX, TX
@@ -104,10 +107,10 @@ State_VB next_state = STATE_nominal;
 volatile uint16_t counter_100_hz = 0;             // counts 10Hz timer increments
 volatile bool counter_new_val_available = false;  // asserted in timer ISR to tell loop that new counter is ready
 
-uint16_t delay_counter = 0;       // hardcoded delay between hall B trigger and switch to inverse
+volatile uint16_t delay_counter = 0;       // hardcoded delay between hall B trigger and switch to inverse
 uint16_t delay_counter_max = 500; // hundredths of a second
 
-uint16_t throw_delay_counter = 0;     // short delay to power relay coils long enough to throw switch
+volatile uint16_t throw_delay_counter = 0;     // short delay to power relay coils long enough to throw switch
 uint16_t throw_delay_counter_max = 25; // hundredths of a second, x10 = milliseconds TODO: tune value to make sure switches throw
 
 
@@ -160,15 +163,73 @@ void ACIA_handler() {
 }
 
 
-// todo: deprecated?
 void hall_b_handler() {
-  hall_b_tripped = true;
+  if (!digitalRead(PIN_HE_B)){
+    hall_b_debounce_count++;
+    if (hall_b_debounce_count >= hall_debounce_saturate) {
+      hall_b_debounce_count = hall_debounce_saturate;
+    }
+    if (hall_b_debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
+      hall_b_tripped = true;
+    }
+  }
+  else {
+    hall_b_debounce_count--;
+    if (hall_b_debounce_count <= 0) {
+      hall_b_debounce_count = 0;
+    }
+    if (hall_b_debounce_count <= hall_debounce_saturate/2 - 1) { // -1 hysteresis
+      hall_b_tripped = false;
+    }
+  }
 }
 
 void hall_c_handler() {
-  hall_c_tripped = true;
-  VB_train_available = false;
+    if (!digitalRead(PIN_HE_C)){
+    hall_c_debounce_count++;
+    if (hall_c_debounce_count >= hall_debounce_saturate) {
+      hall_c_debounce_count = hall_debounce_saturate;
+    }
+    if (hall_c_debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
+      hall_c_tripped = true;
+      VB_train_available = false;
+    }
+  }
+  else {
+    hall_c_debounce_count--;
+    if (hall_c_debounce_count <= 0) {
+      hall_c_debounce_count = 0;
+    }
+    if (hall_c_debounce_count <= hall_debounce_saturate/2 - 1) { // -1 hysteresis
+      hall_c_tripped = false;
+    }
+  }
 }
+
+
+// TODO: deprecated? would be nice to get working
+void hall_handler(int PIN, int16_t *debounce_count, bool *trip_flag) {
+  if (!digitalRead(PIN)){
+    *debounce_count++;
+    if (*debounce_count >= hall_debounce_saturate) {
+      *debounce_count = hall_debounce_saturate;
+    }
+    if (*debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
+      *trip_flag = true;
+    }
+  }
+  else {
+    *debounce_count--;
+    if (*debounce_count <= 0) {
+      *debounce_count = 0;
+    }
+    if (*debounce_count <= hall_debounce_saturate/2 - 1) { // -1 hysteresis
+      *trip_flag = false;
+    }
+  }
+
+}
+
 
 
 /********************************************
@@ -284,7 +345,7 @@ void setup() {
   pinMode(PIN_HE_C, INPUT);
 
 
-  Serial.begin(115200); // TESTING ONLY
+  // Serial.begin(115200); // TESTING ONLY
   aciaSerial.begin(9600);
   Wire.begin(0x87);
   Wire.onRequest(I2C_handler);
@@ -308,9 +369,10 @@ void setup() {
 
 void loop() {
   // constantly read hall effects
-  // TODO: should be a majority of several readings to avoid bounce/glitches
-  hall_b_tripped = !digitalRead(PIN_HE_B); // active low
-  hall_c_tripped = !digitalRead(PIN_HE_C);
+  // hall_handler(PIN_HE_B, &hall_b_debounce_count, &hall_b_tripped);
+  // hall_handler(PIN_HE_C, &hall_c_debounce_count, &hall_c_tripped);
+  hall_b_handler();
+  hall_c_handler();
 
   // handle base counter
   if (counter_new_val_available) {
