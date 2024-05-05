@@ -44,7 +44,7 @@
  //                 4,5                     target yaw dir,step
  //                 2,3                     target pitch dir,step
  //                 A0/14 (same pin)        laser diode on/off
- //                 A1/15 (same pin)        Kill switch
+ //                 16                      Kill switch
  #define P_motor_enable 10
  #define P_track_yaw_dir  6 
  #define P_track_yaw_step 7 
@@ -57,7 +57,7 @@
  #define P_target_pitch_step  3
 
  #define P_laser_on       14
- #define P_kill_switch    15
+ #define P_kill_switch    16
 
  #define PIN_LED 15
  
@@ -366,9 +366,9 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
 // bring all steppers back to home
 void home_steppers() {
   unwind_stepper(&track_pitch_params, &track_pitch);
-  delay(10);
+  delay(100);
   unwind_stepper(&track_yaw_params, &track_yaw);
-  delay(10);
+  delay(100);
   // unwind_stepper(&target_pitch_params, &target_pitch);
   // unwind_stepper(&target_yaw_params, &target_yaw);
 }
@@ -438,7 +438,6 @@ void loop_position_update(){
   
   // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
   VB_train_available = true;
-  EXT_kill = false;
 
 
 
@@ -548,6 +547,8 @@ void setup() {
   WiFi.mode(WIFI_STA);
   delay(5000);
 
+  pinMode(P_kill_switch, INPUT);
+
   // Init ESP-NOW
   // slow flash is bad
   pinMode(PIN_LED, OUTPUT);
@@ -609,7 +610,7 @@ void setup() {
   Serial.read(); // flush
   Serial.flush();
 
-  enable_disable_steppers(true);  // true indicates to enable
+  // enable_disable_steppers(true);  // true indicates to enable
 
 
   #define KP 0.025
@@ -719,6 +720,9 @@ void loop() {
   if (counter_new_val_available) {
     counter_new_val_available = false;  // clear flag!!!!
 
+    // important: get kill switch first! Kill when the switch is OFF
+    EXT_kill = !digitalRead(P_kill_switch);
+
     // handle pixycam and rangefinder updates at correct phases
     switch (counter_240_hz % 4) {
       case 0:
@@ -738,7 +742,7 @@ void loop() {
     #define WIFI_WATCHDOG_MAX 20
     wifi_watchdog++;
     if (wifi_watchdog > WIFI_WATCHDOG_MAX) {
-      Serial.println("Lost ESP-NOW connection!");
+      // Serial.println("Lost ESP-NOW connection!");
       reset_PID(&track_pitch_params);
       reset_PID(&track_yaw_params);
       // reset_PID(&target_pitch_params);
