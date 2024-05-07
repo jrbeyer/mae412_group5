@@ -566,13 +566,27 @@ void loop_position_update(){
 #include "mae412_group5_utests.h"
 
 void setup() {
-  // put your setup code here, to run once:
+  // initialize motor controllers
+  track_yaw.begin(RPM, MICROSTEPS);
+  track_pitch.begin(RPM, MICROSTEPS);
+  // target_yaw.begin(RPM, MICROSTEPS);
+  // target_pitch.begin(RPM, MICROSTEPS);
+
+  
+  track_yaw.setEnableActiveState(LOW);
+  track_pitch.setEnableActiveState(LOW);
+  // target_yaw.setEnableActiveState(LOW);
+  // target_pitch.setEnableActiveState(LOW);
+
+  pinMode(P_kill_switch, INPUT);
+  enable_disable_steppers(false);
+
+  // I2C
   Wire.begin();
   delay(500);
   WiFi.mode(WIFI_STA);
   delay(5000);
 
-  pinMode(P_kill_switch, INPUT);
 
   // Init ESP-NOW
   // slow flash is bad
@@ -608,7 +622,6 @@ void setup() {
   wifi_watchdog = 0;
 
 
-
   // Frequency in float Hz
   if (ITimer1.attachInterrupt(TIMER_FREQ_HZ, HighFrequencyTimerHandler))
     Serial.println("Starting  ITimer OK, millis() = " + String(millis()));
@@ -616,25 +629,10 @@ void setup() {
     Serial.println("Can't set ITimer. Select another freq. or timer");
 
   
-  // initialize motor controllers
-  track_yaw.begin(RPM, MICROSTEPS);
-  track_pitch.begin(RPM, MICROSTEPS);
-  // target_yaw.begin(RPM, MICROSTEPS);
-  // target_pitch.begin(RPM, MICROSTEPS);
-
-  
-  track_yaw.setEnableActiveState(LOW);
-  track_pitch.setEnableActiveState(LOW);
-  // target_yaw.setEnableActiveState(LOW);
-  // target_pitch.setEnableActiveState(LOW);
-
-  track_yaw.disable();
-  track_pitch.disable();
   Serial.begin(115200);
   // while (!Serial.available()){}
   Serial.read(); // flush
   Serial.flush();
-
 
 
   #define KP 0.025
