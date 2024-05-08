@@ -213,8 +213,8 @@ double pixy_train_y         = 0;    // pixels, 0-199
 // stepper motor controllers
 BasicStepperDriver track_yaw(MOTOR_STEPS, P_track_yaw_dir, P_track_yaw_step, P_motor_enable);
 BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_step, P_motor_enable);
-// BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
-// BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
+BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
+BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
 
 bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
 bool sweep_ccw = false;   // keep track of which direction we are sweeping in if true then ccw if false then cw
@@ -222,8 +222,11 @@ bool sweep_ccw = false;   // keep track of which direction we are sweeping in if
 // stepper motor feedback (TODO)
 
 // computed values
-double train_x = 0.0;
-double train_y = 0.0;
+double x_train = 0.0;
+double y_train = 0.0;
+
+long theta_laser_command_count = 0;
+long phi_laser_command_count   = 0;
 
 /********************************************
   Interrupt Handlers
@@ -313,6 +316,31 @@ void loop_pixycam_update(){
   // TODO:
   // - account for offset due to position of pixycam, rotation of the mount, etc.
   // - do all the actual computation
+  const double DELTA_X = 0;
+  const double DELTA_Y = 0;
+  const double DELTA_Z = 0;
+  const double h = 0;
+
+  double theta_pixy_rad = 0.45*PI/180.0*track_yaw_params.count_est;
+  double phi_pixy_rad   = 0.5625*PI/180.0*track_pitch_params.count_est;
+  double d_range_proj = distance_train*cos(phi_pixy_rad);
+
+  x_train = d_range_proj*sin(theta_pixy_rad);
+  y_train = d_range_proj*cos(theta_pixy_rad);
+
+  double x_laser = DELTA_Y - y_train;
+  double y_laser = DELTA_X + x_train;
+
+  double theta_laser_rad = atan2(x_laser, y_laser);
+  double d_laser_proj = sqrt(x_laser*x_laser + y_laser*y_laser);
+
+  double z_abs = h - distance_train*sin(phi_pixy_rad);
+  double z_laser = z_abs - DELTA_Z;
+
+  double phi_laser_rad = atan2(z_laser, d_laser_proj);
+
+  theta_laser_command_count = (long)(180.0*theta_laser_rad/(0.45*PI));
+  phi_laser_command_count   = (long)(180.0*phi_laser_rad /(0.5625*PI));
 }
 
 
@@ -540,22 +568,33 @@ void loop_position_update(){
         home_steppers();
         enable_disable_steppers(false);
       }
+      digitalWrite(P_laser_on, LOW);
       break;
     case STATE_search:
       if (!steppers_enabled) {
         enable_disable_steppers(true);
       }
+      digitalWrite(P_laser_on, LOW);
       search();
       break;
     case STATE_lock: 
       if (!steppers_enabled) {
         enable_disable_steppers(true);
       }
+      digitalWrite(P_laser_on, HIGH);
       track_yaw_params.curr_error =   ((PIXY_MAX_X/2.0) - pixy_train_x);
       track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
       execute_PID(&track_yaw_params, &track_yaw, 1);
       execute_PID(&track_pitch_params, &track_pitch, 1);
       //TODO: move laser pointer too
+
+      long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
+      target_yaw.move(laser_delta_theta);
+      target_yaw_params.count_est = theta_laser_command_count;
+
+      long laser_delta_phi   = phi_laser_command_count   - target_pitch_params.count_est;
+      target_pitch.move(laser_delta_phi);
+      target_pitch_params.count_est = phi_laser_command_count;
       break;
   }
 
@@ -576,18 +615,21 @@ void setup() {
   // initialize motor controllers
   track_yaw.begin(RPM, MICROSTEPS);
   track_pitch.begin(RPM, MICROSTEPS);
-  // target_yaw.begin(RPM, MICROSTEPS);
-  // target_pitch.begin(RPM, MICROSTEPS);
+  target_yaw.begin(RPM, MICROSTEPS);
+  target_pitch.begin(RPM, MICROSTEPS);
 
   
   track_yaw.setEnableActiveState(LOW);
   track_pitch.setEnableActiveState(LOW);
-  // target_yaw.setEnableActiveState(LOW);
-  // target_pitch.setEnableActiveState(LOW);
+  target_yaw.setEnableActiveState(LOW);
+  target_pitch.setEnableActiveState(LOW);
   Serial.begin(115200);
 
   pinMode(P_kill_switch, INPUT);
   enable_disable_steppers(false);
+
+  pinMode(P_laser_on, OUTPUT);
+  digitalWrite(P_laser_on, LOW);
 
   // I2C
   Wire.begin();
