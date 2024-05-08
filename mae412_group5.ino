@@ -318,10 +318,10 @@ void loop_pixycam_update(){
   // TODO:
   // - account for offset due to position of pixycam, rotation of the mount, etc.
   // - do all the actual computation
-  const double DELTA_X = 0;
-  const double DELTA_Y = 0;
-  const double DELTA_Z = 0;
-  const double h = 0;
+  const double DELTA_X = 412.75; //mm
+  const double DELTA_Y = 203.2;
+  const double DELTA_Z = 241.3;
+  const double h = 190.5;
 
   double theta_pixy_rad = 0.45*PI/180.0*track_yaw_params.count_est;
   double phi_pixy_rad   = 0.5625*PI/180.0*track_pitch_params.count_est;
@@ -368,15 +368,15 @@ void enable_disable_steppers(bool enable) {
   if (enable) {
     track_yaw.enable();
     track_pitch.enable();
-    // target_yaw.enable();
-    // target_pitch.enable();
+    target_yaw.enable();
+    target_pitch.enable();
     steppers_enabled = true;
   }
   else {
     track_yaw.disable();
     track_pitch.disable();
-    // target_yaw.disable();
-    // target_pitch.disable();
+    target_yaw.disable();
+    target_pitch.disable();
     steppers_enabled = false;
   }
 }
@@ -597,6 +597,8 @@ void loop_position_update(){
       long laser_delta_phi   = phi_laser_command_count   - target_pitch_params.count_est;
       target_pitch.move(laser_delta_phi);
       target_pitch_params.count_est = phi_laser_command_count;
+
+      Serial.println("Train X, Y: " + String(x_train) + "\t" + String(y_train));
       break;
   }
 
