@@ -13,19 +13,19 @@
   Pin Defines
 *********************************************/
 // for testing
-#define PIN_kill_in 8
-#define PIN_VBTA_in 9
-#define PIN_PTF_in 10
-#define PIN_CTS_out 11
-#define PIN_CTL_out 12
-#define PIN_CTA_out 13
+// #define PIN_kill_in 8
+// #define PIN_VBTA_in 9
+// #define PIN_PTF_in 10
+// #define PIN_CTS_out 11
+// #define PIN_CTL_out 12
+// #define PIN_CTA_out 13
 // end for testing
 
 
  // PINOUTS
  // Physical pin  | Arduino pin number    | Function
  // 1               ~                       RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
- // 17              11                      MOSI (ICSP yellow)
+ ////////////////////////////////////////////////////////////////////  17              11                      MOSI (ICSP yellow)
  // 18              12                      MISO (ICSP orange)
  // 19              13                      SCK (ICSP brown)
  // 27              A4 (ESP 8)              SDA (i2c)
@@ -38,7 +38,8 @@
  // 7,8                                     Vcc/GND
  // NOTE: no pin defines needed for this block
 
- //                 10                      stepper enable
+ //                 10                      Pixy stepper enable
+ //                 11                      laser stepper enable
  //                 6,7                     track yaw dir,step
  //                 39,40                   track pitch dir,step
  //                 4,5                     target yaw dir,step
@@ -46,6 +47,7 @@
  //                 A0/14 (same pin)        laser diode on/off
  //                 16                      Kill switch
  #define P_motor_enable 10
+ #define P_laser_motor_enable 11
  #define P_track_yaw_dir  6 
  #define P_track_yaw_step 7 
  #define P_track_pitch_dir  39
@@ -213,8 +215,8 @@ double pixy_train_y         = 0;    // pixels, 0-199
 // stepper motor controllers
 BasicStepperDriver track_yaw(MOTOR_STEPS, P_track_yaw_dir, P_track_yaw_step, P_motor_enable);
 BasicStepperDriver track_pitch(MOTOR_STEPS, P_track_pitch_dir, P_track_pitch_step, P_motor_enable);
-BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_motor_enable);
-BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_motor_enable);
+BasicStepperDriver target_yaw(MOTOR_STEPS, P_target_yaw_dir, P_target_yaw_step, P_laser_motor_enable);
+BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_step, P_laser_motor_enable);
 
 bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
 bool sweep_ccw = false;   // keep track of which direction we are sweeping in if true then ccw if false then cw
