@@ -170,6 +170,7 @@ void hall_b_handler() {
       hall_b_debounce_count = hall_debounce_saturate;
     }
     if (hall_b_debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
+      Serial.println("Hall B tripped!");
       hall_b_tripped = true;
     }
   }
@@ -185,12 +186,13 @@ void hall_b_handler() {
 }
 
 void hall_c_handler() {
-    if (!digitalRead(PIN_HE_C)){
+  if (!digitalRead(PIN_HE_C)){
     hall_c_debounce_count++;
     if (hall_c_debounce_count >= hall_debounce_saturate) {
       hall_c_debounce_count = hall_debounce_saturate;
     }
     if (hall_c_debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
+      Serial.println("Hall C tripped!");
       hall_c_tripped = true;
       VB_train_available = false;
     }
@@ -240,18 +242,20 @@ void start_throw_switches() {
   digitalWrite(PIN_DIR_A, a_direction);
   digitalWrite(PIN_DIR_B, b_direction);
 
+  delay(10);
+
   // relays active low
   digitalWrite(PIN_SWITCH_TRIG, LOW);
   
   // testing only
-  // Serial.println("Starting to throw...");
-  // Serial.println("A switches: " + String(a_direction));
-  // Serial.println("B switches: " + String(b_direction));
+  Serial.println("Starting to throw...");
+  Serial.println("A switches: " + String(a_direction));
+  Serial.println("B switches: " + String(b_direction));
 }
 void stop_throw_switches() {
   // relays active low
   digitalWrite(PIN_SWITCH_TRIG, HIGH);
-  // Serial.println("Stopping throw!");
+  Serial.println("Stopping throw!");
 }
 
 // compute state machine
@@ -292,15 +296,15 @@ void update_state() {
   curr_state = next_state;
 
   // TODO: testing only
-  // if (curr_state - last_state != 0) {
-  //   // testing only
-  //   String state_string = curr_state == STATE_nominal ? "nominal" :
-  //                         curr_state == STATE_delay ? "delay" :
-  //                         curr_state == STATE_throw_to_inverse ? "throw to inverse" :
-  //                         curr_state == STATE_inverse ? "inverse" :
-  //                         curr_state == STATE_throw_to_nominal ? "throw to nominal" : "bad state";
-  //   Serial.println("==================\n NEW STATE: \n\t" + state_string + "\n==================\n");
-  // }
+  if (curr_state - last_state != 0) {
+    // testing only
+    String state_string = curr_state == STATE_nominal ? "nominal" :
+                          curr_state == STATE_delay ? "delay" :
+                          curr_state == STATE_throw_to_inverse ? "throw to inverse" :
+                          curr_state == STATE_inverse ? "inverse" :
+                          curr_state == STATE_throw_to_nominal ? "throw to nominal" : "bad state";
+    Serial.println("==================\n NEW STATE: \n\t" + state_string + "\n==================\n");
+  }
 
   // output logic, output on transition (Mealy)
   
@@ -340,15 +344,29 @@ void setup() {
   pinMode(PIN_DIR_A, OUTPUT);
   pinMode(PIN_DIR_B, OUTPUT);
   pinMode(PIN_SWITCH_TRIG, OUTPUT);
+
+  // start high
+  digitalWrite(PIN_DIR_A, HIGH);
+  digitalWrite(PIN_DIR_B, HIGH);
+  digitalWrite(PIN_SWITCH_TRIG, HIGH);
   
   pinMode(PIN_HE_B, INPUT);
   pinMode(PIN_HE_C, INPUT);
 
 
-  // Serial.begin(115200); // TESTING ONLY
+  Serial.begin(115200); // TESTING ONLY
   aciaSerial.begin(9600);
   Wire.begin(0x87);
   Wire.onRequest(I2C_handler);
+
+  Serial.println("Startup routine, waiting 10 seconds");
+  delay(10000);
+  Serial.println("Throwing switches to default state");
+  start_throw_switches();
+  delay(15);
+  stop_throw_switches();
+  Serial.println("Switches reset!");
+
 
   ITimer1.init();
   // Frequency in float Hz
@@ -374,8 +392,14 @@ void loop() {
   hall_b_handler();
   hall_c_handler();
 
+  // TESTING: 
+  VB_train_available = true;
+
   // handle base counter
   if (counter_new_val_available) {
+    if (counter_100_hz % 100 == 0) {
+      Serial.println(".");
+    }
     counter_new_val_available = false;  // clear flag!!!!
     update_state(); // also throws switches as needed
   }

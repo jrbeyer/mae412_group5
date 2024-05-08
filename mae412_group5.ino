@@ -463,7 +463,7 @@ void loop_position_update(){
   
   
   // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
-  VB_train_available = true;
+  // VB_train_available = true;
 
 
 
