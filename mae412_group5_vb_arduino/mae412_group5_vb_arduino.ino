@@ -24,6 +24,8 @@
  // 4               2                       Hall Effect B Input
  // 5               3                       Hall Effect C Input
 
+ // 14              8                       VIA
+
 #define PIN_Rx          10
 #define PIN_Tx          11
 #define PIN_DIR_A       5
@@ -31,6 +33,8 @@
 #define PIN_SWITCH_TRIG 7
 #define PIN_HE_B        2
 #define PIN_HE_C        3
+
+#define PIN_VIA         8
 
 /********************************************
  Timer Things (mostly from docs)
@@ -145,6 +149,11 @@ void HighFrequencyTimerHandler()
   }
 }
 
+void VIA_handler() {
+  VB_train_available = true;
+  Serial.println("Hit VIA Handler, VB Train now available");
+}
+
 
 void I2C_handler() {
   byte TxByte = 0;
@@ -168,7 +177,7 @@ void ACIA_handler() {
   while (aciaSerial.available()) {
     watchdog++;
     char RxByte = aciaSerial.read();
-    Serial.println("Got ACIA Data!");
+    Serial.println("Got ACIA Data: " + String(RxByte));
     if (watchdog == 100) {
       break;
     }
@@ -213,6 +222,7 @@ void hall_c_handler() {
       Serial.println("Hall C tripped!");
       hall_c_tripped = true;
       VB_train_available = false;
+      // delay(20000);
     }
   }
   else {
@@ -370,6 +380,7 @@ void setup() {
   
   pinMode(PIN_HE_B, INPUT);
   pinMode(PIN_HE_C, INPUT);
+  pinMode(PIN_VIA, INPUT);
 
 
   Serial.begin(115200); // TESTING ONLY
@@ -401,12 +412,12 @@ void setup() {
   //   Serial.println("Can't set ITimer. Select another freq. or timer");
 
   VB_train_available = false;
-  if (aciaSerial.isListening()) {
-    Serial.println("Listening for ACIA...");
-  }
-  else {
-    Serial.println("Not listening for ACIA...");
-  }
+  // if (aciaSerial.isListening()) {
+  //   Serial.println("Listening for ACIA...");
+  // }
+  // else {
+  //   Serial.println("Not listening for ACIA...");
+  // }
 }
 
 void loop() {
@@ -415,6 +426,10 @@ void loop() {
   // hall_handler(PIN_HE_C, &hall_c_debounce_count, &hall_c_tripped);
   hall_b_handler();
   hall_c_handler();
+
+  if (digitalRead(PIN_VIA)) {
+    VIA_handler();
+  }
 
 
   // TEMP
@@ -434,7 +449,7 @@ void loop() {
     update_state(); // also throws switches as needed
   }
 
-  if (aciaSerial.available() > 0) {
-    ACIA_handler();
-  }
+  // if (aciaSerial.available() > 0) {
+  //   ACIA_handler();
+  // }
 }
