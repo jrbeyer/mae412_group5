@@ -156,6 +156,9 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&inbound_message, incomingData, sizeof(inbound_message));
   wifi_watchdog = 0;
+
+  
+    digitalWrite(PIN_LED, !digitalRead(PIN_LED));
   // Serial.print("Bytes received: ");
   // Serial.println(len);
   // if (inbound_message.pixy_saw_train) {
@@ -298,11 +301,6 @@ void loop_pixycam_update(){
     PC_train_watchdog = 0;
     PC_train_found = true;
 
-    if (PC_train_found) {
-    digitalWrite(PIN_LED, LOW);
-    delay(10);
-    digitalWrite(PIN_LED, HIGH);
-    }
   }
   else { 
     // TODO: make this more robust; slowly move perceived location to center of frame?

@@ -98,6 +98,8 @@ const uint16_t hall_debounce_saturate = 8;
 SoftwareSerial aciaSerial(PIN_Rx, PIN_Tx); // RX, TX
 bool VB_train_available;
 
+bool acia_first_comms = true;
+
 // Mealy machine: throw switches on transitions between states
 State_VB last_state = STATE_nominal;
 State_VB curr_state = STATE_nominal;
@@ -149,17 +151,33 @@ void I2C_handler() {
   TxByte |= (byte)VB_train_available;
   Wire.write(TxByte);
   // TESTING
-  Serial.println("Sent : " + String(TxByte));
+  // Serial.println("Sent : " + String(TxByte));
   // VB_train_available = !VB_train_available;
 }
 
 #define BIT_VBTA (0x01) // bit 1: vector board says train available
+#define TRAIN_NUM 5
 void ACIA_handler() {
-  char RxByte = aciaSerial.read();
-  VB_train_available = false;
-  if (RxByte != -1) {
-    VB_train_available = (bool)(RxByte & BIT_VBTA);
+  if (acia_first_comms) {
+    acia_first_comms = false;
+    return;
   }
+  noInterrupts();
+  VB_train_available = true;
+  int watchdog = 0;
+  while (aciaSerial.available()) {
+    watchdog++;
+    char RxByte = aciaSerial.read();
+    Serial.println("Got ACIA Data!");
+    if (watchdog == 100) {
+      break;
+    }
+  }
+  // VB_train_available = false;
+  // if (RxByte != -1) {
+  //   VB_train_available = RxByte == TRAIN_NUM;
+  // }
+  interrupts();
 }
 
 
@@ -383,6 +401,12 @@ void setup() {
   //   Serial.println("Can't set ITimer. Select another freq. or timer");
 
   VB_train_available = false;
+  if (aciaSerial.isListening()) {
+    Serial.println("Listening for ACIA...");
+  }
+  else {
+    Serial.println("Not listening for ACIA...");
+  }
 }
 
 void loop() {
@@ -392,21 +416,25 @@ void loop() {
   hall_b_handler();
   hall_c_handler();
 
+
+  // TEMP
+  // VB_train_available = true;
+
   // handle base counter
   if (counter_new_val_available) {
-    if (counter_100_hz % 100 == 0) {
+    if (counter_100_hz % 500 == 0) {
       Serial.println(".");
     }
     //TESTING
-    if (counter_100_hz % 500 == 0) {
-      VB_train_available = !VB_train_available;
-      Serial.println("Switching train available...");
-    }
+    // if (counter_100_hz % 500 == 0) {
+    //   VB_train_available = !VB_train_available;
+    //   Serial.println("Switching train available...");
+    // }
     counter_new_val_available = false;  // clear flag!!!!
     update_state(); // also throws switches as needed
   }
 
-  if (aciaSerial.available()) {
+  if (aciaSerial.available() > 0) {
     ACIA_handler();
   }
 }
