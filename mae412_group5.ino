@@ -268,12 +268,15 @@ void init_ADC() {
 // request information from the VB arduino
 #define BIT_VBTA (0x01) // bit 1: vector board says train available
 void request_arduino_comms() {
+  // Serial.println("Requesting from arduino...");
   byte RxByte;
   Wire.requestFrom(0x87, 1); // Request from arduino @ 0x87, Data Length = 1Byte
   while(Wire.available()) {  // Read receive from arduino
     RxByte = Wire.read();
   }
   VB_train_available = (bool)(RxByte & BIT_VBTA);
+
+  Serial.println("Got raw byte: " + String(RxByte));
 }
 
 
@@ -294,6 +297,12 @@ void loop_pixycam_update(){
     // reset watchdog
     PC_train_watchdog = 0;
     PC_train_found = true;
+
+    if (PC_train_found) {
+    digitalWrite(PIN_LED, LOW);
+    delay(10);
+    digitalWrite(PIN_LED, HIGH);
+    }
   }
   else { 
     // TODO: make this more robust; slowly move perceived location to center of frame?
@@ -577,6 +586,7 @@ void setup() {
   track_pitch.setEnableActiveState(LOW);
   // target_yaw.setEnableActiveState(LOW);
   // target_pitch.setEnableActiveState(LOW);
+  Serial.begin(115200);
 
   pinMode(P_kill_switch, INPUT);
   enable_disable_steppers(false);
@@ -629,10 +639,9 @@ void setup() {
     Serial.println("Can't set ITimer. Select another freq. or timer");
 
   
-  Serial.begin(115200);
   // while (!Serial.available()){}
-  Serial.read(); // flush
-  Serial.flush();
+  // Serial.read(); // flush
+  // Serial.flush();
 
 
   #define KP 0.025
@@ -698,6 +707,14 @@ void setup() {
     .count_clip = YAW_COUNT_CLIP,
   };
   
+  int i;
+  for (i = 0; i < 10; i++) {
+    digitalWrite(PIN_LED, HIGH);
+    delay(500);
+    digitalWrite(PIN_LED, LOW);
+    delay(500);
+  }
+  digitalWrite(PIN_LED, HIGH);
 
 
   // #define IN_TEST
@@ -758,7 +775,7 @@ void loop() {
         // loop_rangefinder_update();
         break;
       case 3:
-        // request_arduino_comms();
+        request_arduino_comms();
         break;
     }
 
@@ -779,7 +796,7 @@ void loop() {
       loop_position_update();
     }
 
-    if (counter_240_hz % 10 == 0) {
+    if (counter_240_hz % 50 == 0) {
       String state_string = (control_state == STATE_inactive) ? "inactive" :
                             (control_state == STATE_search)   ? "search"   :
                             (control_state == STATE_lock)     ? "lock"     : "bad state";

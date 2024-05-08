@@ -149,7 +149,7 @@ void I2C_handler() {
   TxByte |= (byte)VB_train_available;
   Wire.write(TxByte);
   // TESTING
-  // Serial.println("Sent : " + String(TxByte));
+  Serial.println("Sent : " + String(TxByte));
   // VB_train_available = !VB_train_available;
 }
 
@@ -392,13 +392,15 @@ void loop() {
   hall_b_handler();
   hall_c_handler();
 
-  // TESTING: 
-  VB_train_available = true;
-
   // handle base counter
   if (counter_new_val_available) {
     if (counter_100_hz % 100 == 0) {
       Serial.println(".");
+    }
+    //TESTING
+    if (counter_100_hz % 500 == 0) {
+      VB_train_available = !VB_train_available;
+      Serial.println("Switching train available...");
     }
     counter_new_val_available = false;  // clear flag!!!!
     update_state(); // also throws switches as needed
