@@ -192,7 +192,7 @@ PID_params target_yaw_params;
 
 // External measurements
 VL53L0X  rangefinder;
-double   distance_train       = 0.0;  // mm
+double   distance_train     = 0.0;  // mm
 Pixy pixy;
 double pixy_train_x         = 0;    // pixels, 0-319
 double pixy_train_y         = 0;    // pixels, 0-199
@@ -291,7 +291,7 @@ void loop_pixycam_update(){
     // reset watchdog
     PC_train_watchdog = 0;
     PC_train_found = true;
-
+    // Serial.println("Found train!");
   }
   else { 
     // TODO: make this more robust; slowly move perceived location to center of frame?
@@ -330,13 +330,11 @@ void loop_pixycam_update(){
   theta_laser_command_count = (long)(180.0*theta_laser_rad/(0.45*PI));
   phi_laser_command_count   = (long)(180.0*phi_laser_rad /(0.5625*PI));
 
-  if (counter_240_hz % 10 == 0) {
-    Serial.println("\n\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-    Serial.println("Distance reading:   " + String(distance_train));
+  if (counter_240_hz % 100 == 0) {
+  // if (0) {
     Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
     Serial.println("Theta command:      " + String(theta_laser_command_count));
     Serial.println("Phi command:        " + String(phi_laser_command_count));
-    Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
   }
   
 }
@@ -485,6 +483,45 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   }
 }
 
+void move_laser_pointer() {
+
+  long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
+
+  if (laser_delta_theta >= target_yaw_params.command_clip) {
+    laser_delta_theta = target_yaw_params.command_clip;
+  }
+  else if (laser_delta_theta <= -target_yaw_params.command_clip) {
+    laser_delta_theta = -target_yaw_params.command_clip;
+  }
+
+  if (theta_laser_command_count > 67 
+    ||theta_laser_command_count < -220) {
+    
+    laser_delta_theta = 0;
+    unwind_stepper(&target_yaw_params, &target_yaw);
+  }
+  target_yaw.move(laser_delta_theta);
+  target_yaw_params.count_est += laser_delta_theta;
+
+  long laser_delta_phi   = phi_laser_command_count - target_pitch_params.count_est;
+
+  if (laser_delta_phi >= target_pitch_params.command_clip) {
+    laser_delta_phi = target_pitch_params.command_clip;
+  }
+  else if (laser_delta_phi <= -target_pitch_params.command_clip) {
+    laser_delta_phi = -target_pitch_params.command_clip;
+  }
+
+  if (phi_laser_command_count >  0 
+    ||phi_laser_command_count < -107) {
+    Serial.println("Hit laser pitch clip: " + String(target_pitch_params.count_est));
+    laser_delta_phi = 0;
+  }
+
+  target_pitch.move(laser_delta_phi);
+  target_pitch_params.count_est += laser_delta_phi;
+}
+
 // service 240Hz position loop updates and update state!
 void loop_position_update(){
   // Serial.println("executed position update, counter: " + String(counter_240_hz));
@@ -580,14 +617,7 @@ void loop_position_update(){
       execute_PID(&track_yaw_params, &track_yaw, 1);
       execute_PID(&track_pitch_params, &track_pitch, 1);
       //TODO: move laser pointer too
-
-      long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
-      target_yaw.move(laser_delta_theta);
-      target_yaw_params.count_est += laser_delta_theta;
-
-      long laser_delta_phi   = phi_laser_command_count   - target_pitch_params.count_est;
-      target_pitch.move(laser_delta_phi);
-      target_pitch_params.count_est += laser_delta_phi;
+      move_laser_pointer();
       break;
   }
 
@@ -671,11 +701,6 @@ void setup() {
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
 
-  
-  // while (!Serial.available()){}
-  // Serial.read(); // flush
-  // Serial.flush();
-
 
   #define KP 0.025
   #define KI 0.5
@@ -684,6 +709,7 @@ void setup() {
   #define COMMAND_CLIP 40.0
   #define PITCH_COUNT_CLIP 64
   #define YAW_COUNT_CLIP 1600
+  #define LASER_YAW_COUNT_CLIP 800
   #define SCALE (80.0/80.0)
 
   // TODO Why are pitch and yaw params defined twice?
@@ -737,7 +763,7 @@ void setup() {
     .prior_error = 0.0,
     .command_clip = COMMAND_CLIP,
     .count_est = 0,
-    .count_clip = YAW_COUNT_CLIP,
+    .count_clip = LASER_YAW_COUNT_CLIP,
   };
   
   int i;
@@ -757,7 +783,7 @@ void setup() {
   // utest_loop_rangefinder_update();
   // utest_loop_position_update();
   // utest_execute_PID();
-  utest_stepper_motor();
+  // utest_stepper_motor();
   // utest_receive_esp_now();
   // utest_request_arduino_comms();
 
@@ -770,24 +796,6 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-
-  // for testing
-  // if (counter_240_hz >= 600) {
-  //   home_steppers();
-  //   // track_yaw.disable();
-  //   // track_pitch.disable();
-  //   delay(1000);
-  //   counter_240_hz = 0;
-  // }
-  // VB_train_available  = digitalRead(PIN_VBTA_in);
-  // PC_train_found      = digitalRead(PIN_PTF_in);
-  // EXT_kill            = digitalRead(PIN_kill_in);
-  // digitalWrite(PIN_CTS_out, CTRL_tracking_search);
-  // digitalWrite(PIN_CTL_out, CTRL_tracking_lock);
-  // digitalWrite(PIN_CTA_out, CTRL_targeting_active);
-  // delay(10);
-  // end for testing
-
 
 
   if (counter_new_val_available) {

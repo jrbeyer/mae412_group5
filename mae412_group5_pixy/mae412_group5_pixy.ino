@@ -27,6 +27,8 @@
 Pixy pixy;
 VL53L0X rangefinder;
 
+double distance_estimate = 0;
+
 
 // message passing
 String success;
@@ -87,16 +89,17 @@ void loop_pixycam_update(){
 // service 60Hz rangefinder update
 void loop_rangefinder_update(){
   // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
+  double next_reading = (double)rangefinder.readRangeContinuousMillimeters();
 
-  // filtering
-  uint16_t next_reading = rangefinder.readRangeContinuousMillimeters();
-
-  outbound_message.rangefinder_range_mm = rangefinder.readRangeContinuousMillimeters();
-  // define a good reading with 50 cm
-  if (outbound_message.rangefinder_range_mm > 5000 || outbound_message.rangefinder_range_mm == 0) {
+  // define a good reading with 1 meter
+  if (next_reading > 1000 || next_reading == 0) {
     outbound_message.rangefinder_got_range = false;
   }
   else {
+    // filtering
+    const double alpha = 0.8;
+    distance_estimate = alpha*distance_estimate + (1-alpha)*next_reading;
+    outbound_message.rangefinder_range_mm = distance_estimate;
     outbound_message.rangefinder_got_range = true;
   }
 }
@@ -169,11 +172,11 @@ void loop() {
   loop_rangefinder_update();
 
   Serial.println("Got pixy reading: " + String(outbound_message.pixy_saw_train));
-  Serial.println("train x: " + String(outbound_message.pixy_train_x));
-  Serial.println("train y: " + String(outbound_message.pixy_train_y));
+  Serial.println("train x:          " + String(outbound_message.pixy_train_x));
+  Serial.println("train y:          " + String(outbound_message.pixy_train_y));
 
-  Serial.println("Got range reading: " + String(outbound_message.rangefinder_got_range));
-  Serial.println("distance (mm): " + String(outbound_message.rangefinder_range_mm));
+  Serial.println("Got range reading:   " + String(outbound_message.rangefinder_got_range));
+  Serial.println("distance (mm):       " + String(outbound_message.rangefinder_range_mm));
 
 
   // outbound_message modified in above two functions

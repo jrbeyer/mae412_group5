@@ -41,7 +41,6 @@ void utest_loop_rangefinder_update() {
   Serial.read(); // flush
 
   loop_rangefinder_update();
-  Serial.println("\tGot raw reading = " + String(distance_sensor_raw));
   Serial.println("\tGot distance    = " + String(distance_train));
 
 }
