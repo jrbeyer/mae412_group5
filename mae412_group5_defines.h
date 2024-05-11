@@ -12,7 +12,7 @@ typedef struct message_S {
     uint16_t  pixy_train_x;
     uint16_t  pixy_train_y;
     bool      rangefinder_got_range;
-    uint16_t  rangefinder_range_mm;
+    double    rangefinder_range_mm;
     String    debug;
 } struct_message;
 

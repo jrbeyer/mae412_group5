@@ -192,7 +192,6 @@ PID_params target_yaw_params;
 
 // External measurements
 VL53L0X  rangefinder;
-uint16_t distance_sensor_raw  = 0;    // mm
 double   distance_train       = 0.0;  // mm
 Pixy pixy;
 double pixy_train_x         = 0;    // pixels, 0-319
@@ -350,8 +349,7 @@ void loop_rangefinder_update(){
 
   if (inbound_message.rangefinder_got_range) {
     inbound_message.rangefinder_got_range = false;
-    distance_sensor_raw = inbound_message.rangefinder_range_mm;
-    distance_train = (double)distance_sensor_raw;
+    distance_train = inbound_message.rangefinder_range_mm;
   }
 }
 

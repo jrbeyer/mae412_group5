@@ -88,6 +88,9 @@ void loop_pixycam_update(){
 void loop_rangefinder_update(){
   // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
+  // filtering
+  uint16_t next_reading = rangefinder.readRangeContinuousMillimeters();
+
   outbound_message.rangefinder_range_mm = rangefinder.readRangeContinuousMillimeters();
   // define a good reading with 50 cm
   if (outbound_message.rangefinder_range_mm > 5000 || outbound_message.rangefinder_range_mm == 0) {
