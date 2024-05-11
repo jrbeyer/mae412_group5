@@ -12,22 +12,8 @@
 /********************************************
   Pin Defines
 *********************************************/
-// for testing
-// #define PIN_kill_in 8
-// #define PIN_VBTA_in 9
-// #define PIN_PTF_in 10
-// #define PIN_CTS_out 11
-// #define PIN_CTL_out 12
-// #define PIN_CTA_out 13
-// end for testing
-
-
- // PINOUTS
  // Physical pin  | Arduino pin number    | Function
- // 1               ~                       RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
- ////////////////////////////////////////////////////////////////////  17              11                      MOSI (ICSP yellow)
- // 18              12                      MISO (ICSP orange)
- // 19              13                      SCK (ICSP brown)
+
  // 27              A4 (ESP 8)              SDA (i2c)
  // 28              A5 (ESP 9)              SCL (i2c)
  // NOTE: no pin defines needed for this block (taken care of by libraries)
@@ -206,8 +192,8 @@ PID_params target_yaw_params;
 
 // External measurements
 VL53L0X  rangefinder;
-uint16_t distance_sensor_raw  = 0;    // ADC ticks, 0-1023
-double   distance_train       = 0.0;  // cm, 10-150
+uint16_t distance_sensor_raw  = 0;    // mm
+double   distance_train       = 0.0;  // mm
 Pixy pixy;
 double pixy_train_x         = 0;    // pixels, 0-319
 double pixy_train_y         = 0;    // pixels, 0-199
@@ -298,6 +284,7 @@ void loop_pixycam_update(){
 
 
   if (inbound_message.pixy_saw_train) {
+    inbound_message.pixy_saw_train = false;
     // smooth update
     const double alpha = 0.9;
     pixy_train_x = (alpha*inbound_message.pixy_train_x) + (1-alpha)*pixy_train_x;
@@ -343,6 +330,16 @@ void loop_pixycam_update(){
 
   theta_laser_command_count = (long)(180.0*theta_laser_rad/(0.45*PI));
   phi_laser_command_count   = (long)(180.0*phi_laser_rad /(0.5625*PI));
+
+  if (counter_240_hz % 10 == 0) {
+    Serial.println("\n\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+    Serial.println("Distance reading:   " + String(distance_train));
+    Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
+    Serial.println("Theta command:      " + String(theta_laser_command_count));
+    Serial.println("Phi command:        " + String(phi_laser_command_count));
+    Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  }
+  
 }
 
 
@@ -351,8 +348,11 @@ void loop_pixycam_update(){
 void loop_rangefinder_update(){
   // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
-  distance_sensor_raw = rangefinder.readRangeContinuousMillimeters();
-  distance_train = (double)distance_sensor_raw / 10.0;
+  if (inbound_message.rangefinder_got_range) {
+    inbound_message.rangefinder_got_range = false;
+    distance_sensor_raw = inbound_message.rangefinder_range_mm;
+    distance_train = (double)distance_sensor_raw;
+  }
 }
 
 // reset PID parameters so motors don't go crazy
@@ -432,8 +432,10 @@ void home_steppers() {
   delay(100);
   unwind_stepper(&track_yaw_params, &track_yaw);
   delay(100);
-  // unwind_stepper(&target_pitch_params, &target_pitch);
-  // unwind_stepper(&target_yaw_params, &target_yaw);
+  unwind_stepper(&target_pitch_params, &target_pitch);
+  delay(100);
+  unwind_stepper(&target_yaw_params, &target_yaw);
+  delay(100);
 }
 
 // generic PID execution functions (can execute once for each stepper motor)
@@ -496,15 +498,6 @@ void loop_position_update(){
     PC_train_watchdog = PC_train_watchdog_max;
   }
   
-  
-  
-  
-  // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
-  // VB_train_available = true;
-
-
-
-
   // update state
   State next_state = STATE_inactive;
   switch (control_state) {
@@ -592,13 +585,11 @@ void loop_position_update(){
 
       long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
       target_yaw.move(laser_delta_theta);
-      target_yaw_params.count_est = theta_laser_command_count;
+      target_yaw_params.count_est += laser_delta_theta;
 
       long laser_delta_phi   = phi_laser_command_count   - target_pitch_params.count_est;
       target_pitch.move(laser_delta_phi);
-      target_pitch_params.count_est = phi_laser_command_count;
-
-      Serial.println("Train X, Y: " + String(x_train) + "\t" + String(y_train));
+      target_pitch_params.count_est += laser_delta_phi;
       break;
   }
 
@@ -768,12 +759,11 @@ void setup() {
   // utest_loop_rangefinder_update();
   // utest_loop_position_update();
   // utest_execute_PID();
-  // utest_stepper_motor();
+  utest_stepper_motor();
   // utest_receive_esp_now();
   // utest_request_arduino_comms();
 
 
-  track_yaw.disable();
   Serial.println("Testing complete!");
   while(true){delay(500);}
   #endif
@@ -816,10 +806,11 @@ void loop() {
       case 1:
         break;
       case 2:
-        // loop_rangefinder_update();
+        loop_rangefinder_update();
         break;
       case 3:
-        request_arduino_comms();
+        // request_arduino_comms();
+        VB_train_available = true;
         break;
     }
 
