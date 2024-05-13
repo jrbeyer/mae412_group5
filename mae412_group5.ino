@@ -494,11 +494,12 @@ void move_laser_pointer() {
     laser_delta_theta = -target_yaw_params.command_clip;
   }
 
-  if (theta_laser_command_count > 67 
-    ||theta_laser_command_count < -220) {
+  if (theta_laser_command_count > 230
+    ||theta_laser_command_count < -230) {
     
     laser_delta_theta = 0;
-    unwind_stepper(&target_yaw_params, &target_yaw);
+    // unwind_stepper(&target_yaw_params, &target_yaw);
+    Serial.println("Hit laser yaw clip: " + String(target_yaw_params.count_est));
   }
   target_yaw.move(laser_delta_theta);
   target_yaw_params.count_est += laser_delta_theta;
@@ -513,7 +514,7 @@ void move_laser_pointer() {
   }
 
   if (phi_laser_command_count >  0 
-    ||phi_laser_command_count < -107) {
+    ||phi_laser_command_count < -120) {
     Serial.println("Hit laser pitch clip: " + String(target_pitch_params.count_est));
     laser_delta_phi = 0;
   }
@@ -616,8 +617,6 @@ void loop_position_update(){
       track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
       execute_PID(&track_yaw_params, &track_yaw, 1);
       execute_PID(&track_pitch_params, &track_pitch, 1);
-      //TODO: move laser pointer too
-      move_laser_pointer();
       break;
   }
 
@@ -817,6 +816,9 @@ void loop() {
       case 3:
         // request_arduino_comms();
         VB_train_available = true;
+        if (control_state == STATE_lock) {
+          move_laser_pointer();
+        }
         break;
     }
 
@@ -830,7 +832,7 @@ void loop() {
       reset_PID(&track_yaw_params);
       // reset_PID(&target_pitch_params);
       // reset_PID(&target_yaw_params);
-      wifi_watchdog--; // don't let it overflow
+      wifi_watchdog = WIFI_WATCHDOG_MAX; // don't let it overflow
     }
     else {
       // always execute position loops
