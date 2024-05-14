@@ -69,6 +69,7 @@
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 200
 #define RPM 100 
+#define SLOW_RPM 100
 // Since microstepping is set externally, make sure this matches the selected mode
 // If it doesn't, the motor will move at a different RPM than chosen
 // 1=full step, 2=half step etc.
@@ -332,9 +333,11 @@ void loop_pixycam_update(){
 
   if (counter_240_hz % 100 == 0) {
   // if (0) {
-    Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
-    Serial.println("Theta command:      " + String(theta_laser_command_count));
+    // Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
+    // Serial.println("Theta command:      " + String(theta_laser_command_count));
     Serial.println("Phi command:        " + String(phi_laser_command_count));
+    Serial.println("Phi estimate:       " + String(target_pitch_params.count_est));
+    Serial.println(" ");
   }
   
 }
@@ -424,13 +427,13 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
 
 // bring all steppers back to home
 void home_steppers() {
-  unwind_stepper(&track_pitch_params, &track_pitch);
-  delay(100);
-  unwind_stepper(&track_yaw_params, &track_yaw);
-  delay(100);
   unwind_stepper(&target_pitch_params, &target_pitch);
   delay(100);
   unwind_stepper(&target_yaw_params, &target_yaw);
+  delay(100);
+  unwind_stepper(&track_pitch_params, &track_pitch);
+  delay(100);
+  unwind_stepper(&track_yaw_params, &track_yaw);
   delay(100);
 }
 
@@ -595,17 +598,17 @@ void loop_position_update(){
   // execute control calculations
   switch (control_state) {
     case STATE_inactive:
+      digitalWrite(P_laser_on, LOW);
       if (steppers_enabled) {
         home_steppers();
         enable_disable_steppers(false);
       }
-      digitalWrite(P_laser_on, LOW);
       break;
     case STATE_search:
+      digitalWrite(P_laser_on, LOW);
       if (!steppers_enabled) {
         enable_disable_steppers(true);
       }
-      digitalWrite(P_laser_on, LOW);
       search();
       break;
     case STATE_lock: 
@@ -637,8 +640,8 @@ void setup() {
   // initialize motor controllers
   track_yaw.begin(RPM, MICROSTEPS);
   track_pitch.begin(RPM, MICROSTEPS);
-  target_yaw.begin(RPM, MICROSTEPS);
-  target_pitch.begin(RPM, MICROSTEPS);
+  target_yaw.begin(SLOW_RPM, MICROSTEPS);
+  target_pitch.begin(SLOW_RPM, MICROSTEPS);
 
   
   track_yaw.setEnableActiveState(LOW);
@@ -843,7 +846,7 @@ void loop() {
       String state_string = (control_state == STATE_inactive) ? "inactive" :
                             (control_state == STATE_search)   ? "search"   :
                             (control_state == STATE_lock)     ? "lock"     : "bad state";
-      Serial.println("========\nSTATE: " + state_string + "\n========");
+      // Serial.println("========\nSTATE: " + state_string + "\n========");
 
     }
   }
