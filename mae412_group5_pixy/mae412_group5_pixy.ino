@@ -68,9 +68,7 @@ void loop_pixycam_update(){
   uint16_t watchdog_max = 150; // from short experiment: should be ~5 samples on average to acquire blocks, takes 2-4ms
   uint16_t blocks = 0;
   while (!blocks && watchdog < watchdog_max) {
-    // Serial.println("test 2");
     watchdog++;
-    // delay(100);
     blocks = pixy.getBlocks();
   }
 
@@ -167,7 +165,7 @@ void setup() {
 
 
 void loop() {
-  delay(20); // TODO: make more robust timings
+  delay(20);
   loop_pixycam_update();
   loop_rangefinder_update();
 

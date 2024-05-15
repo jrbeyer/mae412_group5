@@ -259,16 +259,4 @@ void utest_request_arduino_comms() {
   }
 }
 
-
-
-void utest_loop_position_update() {
-  Serial.println("Beginning loop_position_update test...");
-}
-
-
-void calibrate_rangefinder() {
-
-}
-
-
 #endif

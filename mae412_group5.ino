@@ -177,10 +177,6 @@ State control_state         = STATE_inactive; // state of control FSM
 bool EXT_kill               = false;          // source: external switch, reset to STATE_inactive
 bool VB_train_available     = false;          // source: vector board, asserted when valid train on tracks
 bool PC_train_found         = false;          // source: pixycam, asserted whenever train is in line-of-sight of pixycam
-bool CTRL_tracking_search   = false;          // OUTPUT: asserted when tracking system (pixycam) should scan for a target
-bool CTRL_tracking_lock     = false;          // OUTPUT: asserted when tracking system should LOCK IN to the target
-bool CTRL_targeting_active  = false;          // OUTPUT: asserted when targeting system (laser) should be activated
-bool CTRL_laser_active      = false;          // !! currently unused OUTPUT: asserted when laser diode should be on
 
 uint16_t PC_train_watchdog  = 0;              // don't want FSM to change immediately in case of momentary glitch, so keep watchdog
 uint16_t PC_train_watchdog_max = 10;          // but after 10 times in a row something's probably wrong, should search again
@@ -206,8 +202,6 @@ BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_
 
 bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
 bool sweep_ccw = false;   // keep track of which direction we are sweeping in if true then ccw if false then cw
-
-// stepper motor feedback (TODO)
 
 // computed values
 double x_train = 0.0;
@@ -295,16 +289,12 @@ void loop_pixycam_update(){
     // Serial.println("Found train!");
   }
   else { 
-    // TODO: make this more robust; slowly move perceived location to center of frame?
     pixy_train_x = (PIXY_MAX_X/2);
     pixy_train_y = (PIXY_MAX_Y/2);
     PC_train_watchdog++;
   }
 
   // compute location of train in global coordinates
-  // TODO:
-  // - account for offset due to position of pixycam, rotation of the mount, etc.
-  // - do all the actual computation
   const double DELTA_X = 495.3; //mm
   const double DELTA_Y = 276.86;
   const double DELTA_Z = 248.92;
@@ -415,7 +405,7 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
   while (abs(params->count_est) >= abs(step_size)) {
     driver->move(step_size);
     params->count_est += step_size;
-    delay(30); // drop this down with testing
+    delay(30);
   }
   
   // step the rest of the way
@@ -466,7 +456,6 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   if (params->count_est + command_l > params->count_clip || params->count_est + command_l < -params->count_clip) {
     Serial.println("Hit count limit: " + String(params->count_est));
     command_l = 0;
-    // TODO: unwinding procedure untested in this context
     if (params == &track_yaw_params) {
       unwind_stepper(params, driver);
     }
@@ -574,26 +563,6 @@ void loop_position_update(){
   
   control_state = next_state;
 
-
-  // update outputs from state machine
-  // TODO: deprecated
-  switch (control_state) {
-    case STATE_inactive:
-      CTRL_tracking_search  = false;
-      CTRL_tracking_lock    = false;
-      CTRL_targeting_active = false;
-      break;
-    case STATE_search:
-      CTRL_tracking_search  = true;
-      CTRL_tracking_lock    = false;
-      CTRL_targeting_active = false;
-      break;
-    case STATE_lock:
-      CTRL_tracking_search  = false;
-      CTRL_tracking_lock    = true;
-      CTRL_targeting_active = true;
-      break;
-  }
 
   // execute control calculations
   switch (control_state) {
@@ -714,7 +683,6 @@ void setup() {
   #define LASER_YAW_COUNT_CLIP 800
   #define SCALE (80.0/80.0)
 
-  // TODO Why are pitch and yaw params defined twice?
   track_pitch_params = {
     .curr_target = 0.0,
     .curr_error = 0.0,
