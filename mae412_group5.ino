@@ -169,7 +169,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
 ESP32Timer ITimer1(1);
 
 // counter
-volatile uint16_t counter_240_hz = 0;             // counts 240Hz timer increments
+volatile uint16_t counter_80_hz = 0;             // counts 80Hz timer increments
 volatile bool counter_new_val_available = false;  // asserted in timer ISR to tell loop that new counter is ready
 
 // FSM signals
@@ -218,12 +218,12 @@ long phi_laser_command_count   = 0;
 // #define TIMER_FREQ_HZ 240.0
 #define TIMER_FREQ_HZ 80.0
 // #define TIMER_FREQ_HZ 120.0
-// hanldes the 240 Hz timer
+// hanldes the 80 Hz timer
 bool HighFrequencyTimerHandler(void* timerNo)
 {
   // Doing something here inside ISR
   counter_new_val_available = true;
-  counter_240_hz++;
+  counter_80_hz++;
   return true;
 }
 
@@ -274,7 +274,7 @@ void request_arduino_comms() {
 
 // service 60Hz PixyCam update
 void loop_pixycam_update(){
-  // // Serial.println("executed pixycam update, counter: " + String(counter_240_hz));
+  // // Serial.println("executed pixycam update, counter: " + String(counter_80_hz));
 
 
   if (inbound_message.pixy_saw_train) {
@@ -321,7 +321,7 @@ void loop_pixycam_update(){
   theta_laser_command_count = (long)(180.0*theta_laser_rad/(0.45*PI));
   phi_laser_command_count   = (long)(180.0*phi_laser_rad /(0.5625*PI));
 
-  if (counter_240_hz % 100 == 0) {
+  if (counter_80_hz % 100 == 0) {
   // if (0) {
     // Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
     // Serial.println("Theta command:      " + String(theta_laser_command_count));
@@ -336,7 +336,7 @@ void loop_pixycam_update(){
 // service 60Hz rangefinder update
 // DEPRECATED
 void loop_rangefinder_update(){
-  // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
+  // Serial.println("executed rangefinder update, counter: " + String(counter_80_hz));
 
   if (inbound_message.rangefinder_got_range) {
     inbound_message.rangefinder_got_range = false;
@@ -515,9 +515,9 @@ void move_laser_pointer() {
   target_pitch_params.count_est += laser_delta_phi;
 }
 
-// service 240Hz position loop updates and update state!
+// service 80Hz position loop updates and update state!
 void loop_position_update(){
-  // Serial.println("executed position update, counter: " + String(counter_240_hz));
+  // Serial.println("executed position update, counter: " + String(counter_80_hz));
 
 
   // check this watchdog first to make sure we have up-to-date control signals
@@ -775,7 +775,7 @@ void loop() {
     EXT_kill = !digitalRead(P_kill_switch);
 
     // handle pixycam and rangefinder updates at correct phases
-    switch (counter_240_hz % 4) {
+    switch (counter_80_hz % 4) {
       case 0:
         loop_pixycam_update();
         break;
@@ -810,7 +810,7 @@ void loop() {
       loop_position_update();
     }
 
-    if (counter_240_hz % 50 == 0) {
+    if (counter_80_hz % 50 == 0) {
       String state_string = (control_state == STATE_inactive) ? "inactive" :
                             (control_state == STATE_search)   ? "search"   :
                             (control_state == STATE_lock)     ? "lock"     : "bad state";
