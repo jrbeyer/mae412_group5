@@ -785,8 +785,7 @@ void loop() {
         loop_rangefinder_update();
         break;
       case 3:
-        // request_arduino_comms();
-        VB_train_available = true;
+        request_arduino_comms();
         if (control_state == STATE_lock) {
           move_laser_pointer();
         }
