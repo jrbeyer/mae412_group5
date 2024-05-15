@@ -305,10 +305,10 @@ void loop_pixycam_update(){
   // TODO:
   // - account for offset due to position of pixycam, rotation of the mount, etc.
   // - do all the actual computation
-  const double DELTA_X = 412.75; //mm
-  const double DELTA_Y = 203.2;
-  const double DELTA_Z = 241.3;
-  const double h = 190.5;
+  const double DELTA_X = 495.3; //mm
+  const double DELTA_Y = 276.86;
+  const double DELTA_Z = 248.92;
+  const double h = 175.26;
 
   double theta_pixy_rad = 0.45*PI/180.0*track_yaw_params.count_est;
   double phi_pixy_rad   = 0.5625*PI/180.0*track_pitch_params.count_est;
