@@ -12,22 +12,8 @@
 /********************************************
   Pin Defines
 *********************************************/
-// for testing
-// #define PIN_kill_in 8
-// #define PIN_VBTA_in 9
-// #define PIN_PTF_in 10
-// #define PIN_CTS_out 11
-// #define PIN_CTL_out 12
-// #define PIN_CTA_out 13
-// end for testing
-
-
- // PINOUTS
  // Physical pin  | Arduino pin number    | Function
- // 1               ~                       RESET (ICSP connector, for PixyCam) (might not be used? will need to check that pixycam uses 3-wire SPI)
- ////////////////////////////////////////////////////////////////////  17              11                      MOSI (ICSP yellow)
- // 18              12                      MISO (ICSP orange)
- // 19              13                      SCK (ICSP brown)
+
  // 27              A4 (ESP 8)              SDA (i2c)
  // 28              A5 (ESP 9)              SCL (i2c)
  // NOTE: no pin defines needed for this block (taken care of by libraries)
@@ -83,6 +69,7 @@
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 200
 #define RPM 100 
+#define SLOW_RPM 100
 // Since microstepping is set externally, make sure this matches the selected mode
 // If it doesn't, the motor will move at a different RPM than chosen
 // 1=full step, 2=half step etc.
@@ -190,10 +177,6 @@ State control_state         = STATE_inactive; // state of control FSM
 bool EXT_kill               = false;          // source: external switch, reset to STATE_inactive
 bool VB_train_available     = false;          // source: vector board, asserted when valid train on tracks
 bool PC_train_found         = false;          // source: pixycam, asserted whenever train is in line-of-sight of pixycam
-bool CTRL_tracking_search   = false;          // OUTPUT: asserted when tracking system (pixycam) should scan for a target
-bool CTRL_tracking_lock     = false;          // OUTPUT: asserted when tracking system should LOCK IN to the target
-bool CTRL_targeting_active  = false;          // OUTPUT: asserted when targeting system (laser) should be activated
-bool CTRL_laser_active      = false;          // !! currently unused OUTPUT: asserted when laser diode should be on
 
 uint16_t PC_train_watchdog  = 0;              // don't want FSM to change immediately in case of momentary glitch, so keep watchdog
 uint16_t PC_train_watchdog_max = 10;          // but after 10 times in a row something's probably wrong, should search again
@@ -206,8 +189,7 @@ PID_params target_yaw_params;
 
 // External measurements
 VL53L0X  rangefinder;
-uint16_t distance_sensor_raw  = 0;    // ADC ticks, 0-1023
-double   distance_train       = 0.0;  // cm, 10-150
+double   distance_train     = 0.0;  // mm
 Pixy pixy;
 double pixy_train_x         = 0;    // pixels, 0-319
 double pixy_train_y         = 0;    // pixels, 0-199
@@ -220,8 +202,6 @@ BasicStepperDriver target_pitch(MOTOR_STEPS, P_target_pitch_dir, P_target_pitch_
 
 bool steppers_enabled = false;  // keep track of if we have enabled or disabled the steppers
 bool sweep_ccw = false;   // keep track of which direction we are sweeping in if true then ccw if false then cw
-
-// stepper motor feedback (TODO)
 
 // computed values
 double x_train = 0.0;
@@ -298,6 +278,7 @@ void loop_pixycam_update(){
 
 
   if (inbound_message.pixy_saw_train) {
+    inbound_message.pixy_saw_train = false;
     // smooth update
     const double alpha = 0.9;
     pixy_train_x = (alpha*inbound_message.pixy_train_x) + (1-alpha)*pixy_train_x;
@@ -305,23 +286,19 @@ void loop_pixycam_update(){
     // reset watchdog
     PC_train_watchdog = 0;
     PC_train_found = true;
-
+    // Serial.println("Found train!");
   }
   else { 
-    // TODO: make this more robust; slowly move perceived location to center of frame?
     pixy_train_x = (PIXY_MAX_X/2);
     pixy_train_y = (PIXY_MAX_Y/2);
     PC_train_watchdog++;
   }
 
   // compute location of train in global coordinates
-  // TODO:
-  // - account for offset due to position of pixycam, rotation of the mount, etc.
-  // - do all the actual computation
-  const double DELTA_X = 412.75; //mm
-  const double DELTA_Y = 203.2;
-  const double DELTA_Z = 241.3;
-  const double h = 190.5;
+  const double DELTA_X = 495.3; //mm
+  const double DELTA_Y = 276.86;
+  const double DELTA_Z = 248.92;
+  const double h = 175.26;
 
   double theta_pixy_rad = 0.45*PI/180.0*track_yaw_params.count_est;
   double phi_pixy_rad   = 0.5625*PI/180.0*track_pitch_params.count_est;
@@ -343,6 +320,16 @@ void loop_pixycam_update(){
 
   theta_laser_command_count = (long)(180.0*theta_laser_rad/(0.45*PI));
   phi_laser_command_count   = (long)(180.0*phi_laser_rad /(0.5625*PI));
+
+  if (counter_240_hz % 100 == 0) {
+  // if (0) {
+    // Serial.println("Position estimate: (" + String(x_train) + ", " + String(y_train) + ")");
+    // Serial.println("Theta command:      " + String(theta_laser_command_count));
+    Serial.println("Phi command:        " + String(phi_laser_command_count));
+    Serial.println("Phi estimate:       " + String(target_pitch_params.count_est));
+    Serial.println(" ");
+  }
+  
 }
 
 
@@ -351,8 +338,10 @@ void loop_pixycam_update(){
 void loop_rangefinder_update(){
   // Serial.println("executed rangefinder update, counter: " + String(counter_240_hz));
 
-  distance_sensor_raw = rangefinder.readRangeContinuousMillimeters();
-  distance_train = (double)distance_sensor_raw / 10.0;
+  if (inbound_message.rangefinder_got_range) {
+    inbound_message.rangefinder_got_range = false;
+    distance_train = inbound_message.rangefinder_range_mm;
+  }
 }
 
 // reset PID parameters so motors don't go crazy
@@ -416,7 +405,7 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
   while (abs(params->count_est) >= abs(step_size)) {
     driver->move(step_size);
     params->count_est += step_size;
-    delay(30); // drop this down with testing
+    delay(30);
   }
   
   // step the rest of the way
@@ -428,12 +417,14 @@ void unwind_stepper(PID_params* params, BasicStepperDriver* driver) {
 
 // bring all steppers back to home
 void home_steppers() {
+  unwind_stepper(&target_pitch_params, &target_pitch);
+  delay(100);
+  unwind_stepper(&target_yaw_params, &target_yaw);
+  delay(100);
   unwind_stepper(&track_pitch_params, &track_pitch);
   delay(100);
   unwind_stepper(&track_yaw_params, &track_yaw);
   delay(100);
-  // unwind_stepper(&target_pitch_params, &target_pitch);
-  // unwind_stepper(&target_yaw_params, &target_yaw);
 }
 
 // generic PID execution functions (can execute once for each stepper motor)
@@ -465,7 +456,6 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   if (params->count_est + command_l > params->count_clip || params->count_est + command_l < -params->count_clip) {
     Serial.println("Hit count limit: " + String(params->count_est));
     command_l = 0;
-    // TODO: unwinding procedure untested in this context
     if (params == &track_yaw_params) {
       unwind_stepper(params, driver);
     }
@@ -485,6 +475,46 @@ void execute_PID(PID_params* params, BasicStepperDriver* driver, int i) {
   }
 }
 
+void move_laser_pointer() {
+
+  long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
+
+  if (laser_delta_theta >= target_yaw_params.command_clip) {
+    laser_delta_theta = target_yaw_params.command_clip;
+  }
+  else if (laser_delta_theta <= -target_yaw_params.command_clip) {
+    laser_delta_theta = -target_yaw_params.command_clip;
+  }
+
+  if (theta_laser_command_count > 230
+    ||theta_laser_command_count < -230) {
+    
+    laser_delta_theta = 0;
+    // unwind_stepper(&target_yaw_params, &target_yaw);
+    Serial.println("Hit laser yaw clip: " + String(target_yaw_params.count_est));
+  }
+  target_yaw.move(laser_delta_theta);
+  target_yaw_params.count_est += laser_delta_theta;
+
+  long laser_delta_phi   = phi_laser_command_count - target_pitch_params.count_est;
+
+  if (laser_delta_phi >= target_pitch_params.command_clip) {
+    laser_delta_phi = target_pitch_params.command_clip;
+  }
+  else if (laser_delta_phi <= -target_pitch_params.command_clip) {
+    laser_delta_phi = -target_pitch_params.command_clip;
+  }
+
+  if (phi_laser_command_count >  0 
+    ||phi_laser_command_count < -120) {
+    Serial.println("Hit laser pitch clip: " + String(target_pitch_params.count_est));
+    laser_delta_phi = 0;
+  }
+
+  target_pitch.move(laser_delta_phi);
+  target_pitch_params.count_est += laser_delta_phi;
+}
+
 // service 240Hz position loop updates and update state!
 void loop_position_update(){
   // Serial.println("executed position update, counter: " + String(counter_240_hz));
@@ -496,15 +526,6 @@ void loop_position_update(){
     PC_train_watchdog = PC_train_watchdog_max;
   }
   
-  
-  
-  
-  // TODO :!!!!!!!!!!!!!!!!! TESTING: remove this when ready to integrate everything
-  // VB_train_available = true;
-
-
-
-
   // update state
   State next_state = STATE_inactive;
   switch (control_state) {
@@ -543,40 +564,20 @@ void loop_position_update(){
   control_state = next_state;
 
 
-  // update outputs from state machine
-  // TODO: deprecated
-  switch (control_state) {
-    case STATE_inactive:
-      CTRL_tracking_search  = false;
-      CTRL_tracking_lock    = false;
-      CTRL_targeting_active = false;
-      break;
-    case STATE_search:
-      CTRL_tracking_search  = true;
-      CTRL_tracking_lock    = false;
-      CTRL_targeting_active = false;
-      break;
-    case STATE_lock:
-      CTRL_tracking_search  = false;
-      CTRL_tracking_lock    = true;
-      CTRL_targeting_active = true;
-      break;
-  }
-
   // execute control calculations
   switch (control_state) {
     case STATE_inactive:
+      digitalWrite(P_laser_on, LOW);
       if (steppers_enabled) {
         home_steppers();
         enable_disable_steppers(false);
       }
-      digitalWrite(P_laser_on, LOW);
       break;
     case STATE_search:
+      digitalWrite(P_laser_on, LOW);
       if (!steppers_enabled) {
         enable_disable_steppers(true);
       }
-      digitalWrite(P_laser_on, LOW);
       search();
       break;
     case STATE_lock: 
@@ -588,17 +589,6 @@ void loop_position_update(){
       track_pitch_params.curr_error = ((PIXY_MAX_Y/2.0) - pixy_train_y);
       execute_PID(&track_yaw_params, &track_yaw, 1);
       execute_PID(&track_pitch_params, &track_pitch, 1);
-      //TODO: move laser pointer too
-
-      long laser_delta_theta = theta_laser_command_count - target_yaw_params.count_est;
-      target_yaw.move(laser_delta_theta);
-      target_yaw_params.count_est = theta_laser_command_count;
-
-      long laser_delta_phi   = phi_laser_command_count   - target_pitch_params.count_est;
-      target_pitch.move(laser_delta_phi);
-      target_pitch_params.count_est = phi_laser_command_count;
-
-      Serial.println("Train X, Y: " + String(x_train) + "\t" + String(y_train));
       break;
   }
 
@@ -619,8 +609,8 @@ void setup() {
   // initialize motor controllers
   track_yaw.begin(RPM, MICROSTEPS);
   track_pitch.begin(RPM, MICROSTEPS);
-  target_yaw.begin(RPM, MICROSTEPS);
-  target_pitch.begin(RPM, MICROSTEPS);
+  target_yaw.begin(SLOW_RPM, MICROSTEPS);
+  target_pitch.begin(SLOW_RPM, MICROSTEPS);
 
   
   track_yaw.setEnableActiveState(LOW);
@@ -682,11 +672,6 @@ void setup() {
   else
     Serial.println("Can't set ITimer. Select another freq. or timer");
 
-  
-  // while (!Serial.available()){}
-  // Serial.read(); // flush
-  // Serial.flush();
-
 
   #define KP 0.025
   #define KI 0.5
@@ -695,9 +680,9 @@ void setup() {
   #define COMMAND_CLIP 40.0
   #define PITCH_COUNT_CLIP 64
   #define YAW_COUNT_CLIP 1600
+  #define LASER_YAW_COUNT_CLIP 800
   #define SCALE (80.0/80.0)
 
-  // TODO Why are pitch and yaw params defined twice?
   track_pitch_params = {
     .curr_target = 0.0,
     .curr_error = 0.0,
@@ -748,7 +733,7 @@ void setup() {
     .prior_error = 0.0,
     .command_clip = COMMAND_CLIP,
     .count_est = 0,
-    .count_clip = YAW_COUNT_CLIP,
+    .count_clip = LASER_YAW_COUNT_CLIP,
   };
   
   int i;
@@ -773,7 +758,6 @@ void setup() {
   // utest_request_arduino_comms();
 
 
-  track_yaw.disable();
   Serial.println("Testing complete!");
   while(true){delay(500);}
   #endif
@@ -782,24 +766,6 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-
-  // for testing
-  // if (counter_240_hz >= 600) {
-  //   home_steppers();
-  //   // track_yaw.disable();
-  //   // track_pitch.disable();
-  //   delay(1000);
-  //   counter_240_hz = 0;
-  // }
-  // VB_train_available  = digitalRead(PIN_VBTA_in);
-  // PC_train_found      = digitalRead(PIN_PTF_in);
-  // EXT_kill            = digitalRead(PIN_kill_in);
-  // digitalWrite(PIN_CTS_out, CTRL_tracking_search);
-  // digitalWrite(PIN_CTL_out, CTRL_tracking_lock);
-  // digitalWrite(PIN_CTA_out, CTRL_targeting_active);
-  // delay(10);
-  // end for testing
-
 
 
   if (counter_new_val_available) {
@@ -816,10 +782,14 @@ void loop() {
       case 1:
         break;
       case 2:
-        // loop_rangefinder_update();
+        loop_rangefinder_update();
         break;
       case 3:
-        request_arduino_comms();
+        // request_arduino_comms();
+        VB_train_available = true;
+        if (control_state == STATE_lock) {
+          move_laser_pointer();
+        }
         break;
     }
 
@@ -833,7 +803,7 @@ void loop() {
       reset_PID(&track_yaw_params);
       // reset_PID(&target_pitch_params);
       // reset_PID(&target_yaw_params);
-      wifi_watchdog--; // don't let it overflow
+      wifi_watchdog = WIFI_WATCHDOG_MAX; // don't let it overflow
     }
     else {
       // always execute position loops
@@ -844,7 +814,7 @@ void loop() {
       String state_string = (control_state == STATE_inactive) ? "inactive" :
                             (control_state == STATE_search)   ? "search"   :
                             (control_state == STATE_lock)     ? "lock"     : "bad state";
-      Serial.println("========\nSTATE: " + state_string + "\n========");
+      // Serial.println("========\nSTATE: " + state_string + "\n========");
 
     }
   }

@@ -61,9 +61,8 @@
 
 // straight_turnout = top switch straight, bottom switch turnout
 // turnout_straight = top switch turnout, bottom switch straight
-// where top = 1,2; bottom = 3,4 in diagram :)
+// where top = 1,2; bottom = 3,4 in diagram
 
-// TODO: how to set in order to actually throw in the right direction?
 typedef enum switch_direction {
   DIR_straight_turnout = HIGH,
   DIR_turnout_straight = LOW,
@@ -117,7 +116,7 @@ volatile uint16_t delay_counter = 0;       // hardcoded delay between hall B tri
 uint16_t delay_counter_max = 500; // hundredths of a second
 
 volatile uint16_t throw_delay_counter = 0;     // short delay to power relay coils long enough to throw switch
-uint16_t throw_delay_counter_max = 25; // hundredths of a second, x10 = milliseconds TODO: tune value to make sure switches throw
+uint16_t throw_delay_counter_max = 25; // hundredths of a second, x10 = milliseconds
 
 
 /********************************************
@@ -237,35 +236,9 @@ void hall_c_handler() {
 }
 
 
-// TODO: deprecated? would be nice to get working
-void hall_handler(int PIN, int16_t *debounce_count, bool *trip_flag) {
-  if (!digitalRead(PIN)){
-    *debounce_count++;
-    if (*debounce_count >= hall_debounce_saturate) {
-      *debounce_count = hall_debounce_saturate;
-    }
-    if (*debounce_count >= hall_debounce_saturate/2 + 1 ) { // +1 hysteresis
-      *trip_flag = true;
-    }
-  }
-  else {
-    *debounce_count--;
-    if (*debounce_count <= 0) {
-      *debounce_count = 0;
-    }
-    if (*debounce_count <= hall_debounce_saturate/2 - 1) { // -1 hysteresis
-      *trip_flag = false;
-    }
-  }
-
-}
-
-
-
 /********************************************
   Helper Functions
 *********************************************/
-// TODO: throw switches
 void start_throw_switches() {
   digitalWrite(PIN_DIR_A, a_direction);
   digitalWrite(PIN_DIR_B, b_direction);
@@ -323,9 +296,7 @@ void update_state() {
   last_state = curr_state;
   curr_state = next_state;
 
-  // TODO: testing only
   if (curr_state - last_state != 0) {
-    // testing only
     String state_string = curr_state == STATE_nominal ? "nominal" :
                           curr_state == STATE_delay ? "delay" :
                           curr_state == STATE_throw_to_inverse ? "throw to inverse" :
@@ -383,7 +354,7 @@ void setup() {
   pinMode(PIN_VIA, INPUT);
 
 
-  Serial.begin(115200); // TESTING ONLY
+  Serial.begin(115200);
   aciaSerial.begin(9600);
   Wire.begin(0x87);
   Wire.onRequest(I2C_handler);
@@ -408,22 +379,12 @@ void setup() {
       delay(1000);
     }
   }
-  // else
-  //   Serial.println("Can't set ITimer. Select another freq. or timer");
-
   VB_train_available = false;
-  // if (aciaSerial.isListening()) {
-  //   Serial.println("Listening for ACIA...");
-  // }
-  // else {
-  //   Serial.println("Not listening for ACIA...");
-  // }
+
 }
 
 void loop() {
   // constantly read hall effects
-  // hall_handler(PIN_HE_B, &hall_b_debounce_count, &hall_b_tripped);
-  // hall_handler(PIN_HE_C, &hall_c_debounce_count, &hall_c_tripped);
   hall_b_handler();
   hall_c_handler();
 
@@ -431,25 +392,13 @@ void loop() {
     VIA_handler();
   }
 
-
-  // TEMP
-  // VB_train_available = true;
-
   // handle base counter
   if (counter_new_val_available) {
     if (counter_100_hz % 500 == 0) {
       Serial.println(".");
     }
-    //TESTING
-    // if (counter_100_hz % 500 == 0) {
-    //   VB_train_available = !VB_train_available;
-    //   Serial.println("Switching train available...");
-    // }
     counter_new_val_available = false;  // clear flag!!!!
     update_state(); // also throws switches as needed
   }
 
-  // if (aciaSerial.available() > 0) {
-  //   ACIA_handler();
-  // }
 }

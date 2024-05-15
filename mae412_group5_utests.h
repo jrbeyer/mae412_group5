@@ -1,6 +1,6 @@
 /********************************************
   UNIT TESTING
-  Very bad design, requires access to variables in mae412_group5.ino
+  requires access to variables in mae412_group5.ino
 *********************************************/
 
 #ifndef MAE412_UTESTS_H
@@ -41,7 +41,6 @@ void utest_loop_rangefinder_update() {
   Serial.read(); // flush
 
   loop_rangefinder_update();
-  Serial.println("\tGot raw reading = " + String(distance_sensor_raw));
   Serial.println("\tGot distance    = " + String(distance_train));
 
 }
@@ -79,6 +78,7 @@ void utest_execute_PID() {
 
 void utest_stepper_motor() {
   Serial.println("Stepper motor unit tests...");
+  enable_disable_steppers(true);
   delay(4000);
   int i;
   int max = 20;
@@ -86,46 +86,75 @@ void utest_stepper_motor() {
   int del = 50;
 
   // delay testing
-  if (1) {
+  if (0) {
     max = 40;
     for (del = 6; del >= 2; del -= 2) {
       delay(1000);
       step = 1;
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
-        track_yaw.move(step);
+        target_yaw.move(step);
         delay(del);
       }
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
-        track_yaw.move(-step);
+        target_yaw.move(-step);
         delay(del);
       }
       delay(1000);
       step = 5;
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
-        track_yaw.move(step);
+        target_yaw.move(step);
         delay(del);
       }
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
-        track_yaw.move(-step);
+        target_yaw.move(-step);
         delay(del);
       }
       delay(1000);
       step = 10;
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
-        track_yaw.move(step);
+        target_yaw.move(step);
         delay(del);
       }
       for (i = 0; i < max; i++) {
         Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
-        track_yaw.move(-step);
+        target_yaw.move(-step);
         delay(del);
       }
     }
+  }
+
+  // target pitch test
+  if (1) {
+    delay(1000);
+      step = 1;
+      max = 20;
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
+        target_pitch.move(step);
+        delay(del);
+      }
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
+        target_pitch.move(-step);
+        delay(del);
+      }
+      delay(1000);
+      step = 5;
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(step) + "\t" + String(i));
+        target_pitch.move(step);
+        delay(del);
+      }
+      for (i = 0; i < max; i++) {
+        Serial.println("Delay: " + String(del) + "\t step: " + String(-step) + "\t" + String(i));
+        target_pitch.move(-step);
+        delay(del);
+      }
   }
 
   // open loop positioning test
@@ -193,6 +222,7 @@ void utest_stepper_motor() {
   }
   }
 
+  enable_disable_steppers(false);
   delay(100);
 }
 
@@ -228,16 +258,5 @@ void utest_request_arduino_comms() {
     delay(800);
   }
 }
-
-
-void utest_loop_position_update() {
-  Serial.println("Beginning loop_position_update test...");
-}
-
-
-void calibrate_rangefinder() {
-
-}
-
 
 #endif
