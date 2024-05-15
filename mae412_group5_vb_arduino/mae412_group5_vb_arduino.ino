@@ -391,6 +391,9 @@ void loop() {
   if (digitalRead(PIN_VIA)) {
     VIA_handler();
   }
+  else {
+    VB_train_available = false;
+  }
 
   // handle base counter
   if (counter_new_val_available) {
